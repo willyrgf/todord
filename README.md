@@ -1,7 +1,6 @@
-# todolist-bot-discord
+# todord
 
 Run using Nix:
 ```sh
- DISCORD_TOKEN="..." nix run 'github:willyrgf/todolist-bot-discord'
+DISCORD_TOKEN="..." nix run 'github:willyrgf/todord'
 ```
-
