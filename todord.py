@@ -222,14 +222,6 @@ class ToDoList(commands.Cog):
         else:
             await ctx.send("Invalid task number. Please check your list using !list.")
 
-    @commands.command(name="clear", help="Clear your to-do list. Usage: !clear")
-    async def clear_tasks(self, ctx):
-        channel_id = ctx.channel.id
-        user_id = ctx.author.id
-        todo_lists[channel_id][user_id] = []
-        await ctx.send("Your to-do list has been cleared.")
-        await save_changes(ctx)
-
 
 class Bot(commands.Cog):
     """Maintenance commands for the to-do list system."""
@@ -269,6 +261,14 @@ class Bot(commands.Cog):
             await ctx.send(f"**Available to-do list files:**\n{files_list}")
         else:
             await ctx.send("No saved to-do list files found.")
+
+    @commands.command(name="clear", help="Clear your to-do list. Usage: !clear")
+    async def clear_tasks(self, ctx):
+        channel_id = ctx.channel.id
+        user_id = ctx.author.id
+        todo_lists[channel_id][user_id] = []
+        await ctx.send("Your to-do list has been cleared.")
+        await save_changes(ctx)
 
 
 @bot.event
