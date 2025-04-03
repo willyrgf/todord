@@ -1,8 +1,19 @@
 import discord
+import os
 from discord.ext import commands
+from dotenv import load_dotenv
 
-# Set up the bot with a command prefix.
-bot = commands.Bot(command_prefix='!')
+load_dotenv()
+
+TOKEN = os.getenv("DISCORD_TOKEN")
+if not TOKEN:
+    print("No DISCORD_TOKEN env configured.")
+    exit(1)
+
+# set up the bot with a command prefix.
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix='!', intents=intents)
 
 # In-memory dictionary to store to-do lists for each user.
 todo_lists = {}
@@ -10,6 +21,10 @@ todo_lists = {}
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user.name}')
+
+@bot.listen('on_message')
+async def print_message(message):
+    print(f"Received message from {message.author} in {message.channel}: {message.content}")
 
 @bot.command(name='add', help='Add a task to your to-do list. Usage: !add <task>')
 async def add_task(ctx, *, task: str):
@@ -49,6 +64,5 @@ async def clear_tasks(ctx):
     todo_lists[user_id] = []
     await ctx.send("Your to-do list has been cleared.")
 
-# Replace 'YOUR_BOT_TOKEN' with your bot's token.
-bot.run('YOUR_BOT_TOKEN')
+bot.run(TOKEN)
 

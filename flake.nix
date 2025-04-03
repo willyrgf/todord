@@ -10,10 +10,11 @@
         pkgs = import nixpkgs { inherit system; };
         pythonEnv = pkgs.python3.withPackages (ps: with ps; [
           discordpy
+          python-dotenv
         ]);
       in
       {
-        packages.todolistbot = pkgs.stdenv.mkDerivation rec {
+        packages.todolistbot = pkgs.stdenv.mkDerivation {
           pname = "todolistbot";
           version = "0.0.1";
           src = ./.;
@@ -47,7 +48,7 @@
 
         defaultApp = {
           type = "app";
-          program = "${self.packages.${system}.todolistbot}/bin/todolistbot.py";
+          program = "${self.packages.${system}.todolistbot}/bin/todolistbot";
         };
       });
 }
