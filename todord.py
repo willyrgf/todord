@@ -127,7 +127,7 @@ class Task:
 ## Cogs
 
 
-class TodoCog(commands.Cog):
+class ToDoList(commands.Cog):
     """Commands for managing your to-do list."""
 
     def __init__(self, bot):
@@ -231,7 +231,7 @@ class TodoCog(commands.Cog):
         await save_changes(ctx)
 
 
-class MaintenanceCog(commands.Cog):
+class Bot(commands.Cog):
     """Maintenance commands for the to-do list system."""
 
     def __init__(self, bot):
@@ -280,8 +280,8 @@ async def on_ready():
         print("Failed to log in")
 
     # Load cogs
-    await bot.add_cog(TodoCog(bot))
-    await bot.add_cog(MaintenanceCog(bot))
+    await bot.add_cog(ToDoList(bot))
+    await bot.add_cog(Bot(bot))
 
 
 @bot.listen("on_message")

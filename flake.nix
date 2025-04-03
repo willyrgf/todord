@@ -56,7 +56,8 @@
             type = "app";
             program = "${self.packages.${system}.todord}/bin/todord";
             meta = {
-              description = "Todord Bot App";
+              description = "Todord application";
+              mainProgram = "todord";
             };
           };
           
@@ -66,11 +67,20 @@
         devShells = {
           default = pkgs.mkShell {
             name = "todord-dev-env";
-            packages = [self.packages.${system}.todord] ;
-            buildInputs = [ pythonEnv ];
+            packages = [ pythonEnv pkgs.git ];
+            
+            # Don't automatically run the todord package to prevent auto-execution
+            # Instead make it available on PATH only
             shellHook = ''
+              export HISTFILE=$HOME/.history_nix
+              export PYTHONPATH=$PYTHONPATH:$(pwd)
+              
               export PATH=${pythonEnv}/bin:${pkgs.git}/bin:$PATH
+              
+              alias todord="python $(pwd)/todord.py"
+              
               echo "Todord development environment activated"
+              echo "Type 'todord' to run the application"
             '';
           };
         };
