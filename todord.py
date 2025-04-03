@@ -32,8 +32,8 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# In-memory dictionary to store to-do lists for each user.
-todo_lists = {}  # channel->user->task
+# In-memory dictionary to store to-do lists for each channel.
+todo_lists = {}  # channel->task
 
 # Global session ID for this bot run
 SessionID = str(uuid.uuid4())
@@ -67,29 +67,26 @@ async def load_todo_lists_from_file(ctx, filename):
 
         # Convert raw data back to Task objects
         reconstructed_todo_lists = {}
-        for channel_id, users in data.items():
+        for channel_id, tasks in data.items():
             channel_id = int(channel_id)  # JSON keys are strings, convert back to int
-            reconstructed_todo_lists[channel_id] = {}
+            reconstructed_todo_lists[channel_id] = []
 
-            for user_id, tasks in users.items():
-                user_id = int(user_id)  # JSON keys are strings, convert back to int
-                reconstructed_todo_lists[channel_id][user_id] = []
+            for task_data in tasks:
+                # Create a Task object with the data
+                task = Task(
+                    ctx,
+                    task_data["id"],
+                    task_data["title"],
+                    task_data["status"],
+                    task_data["logs"],
+                    task_data.get("creator", "Unknown")
+                )
 
-                for task_data in tasks:
-                    # Create a Task object with the data
-                    task = Task(
-                        ctx,
-                        task_data["id"],
-                        task_data["title"],
-                        task_data["status"],
-                        task_data["logs"],
-                    )
+                # Restore internal logs if they exist
+                if "internal_logs" in task_data:
+                    task.internal_logs = task_data["internal_logs"]
 
-                    # Restore internal logs if they exist
-                    if "internal_logs" in task_data:
-                        task.internal_logs = task_data["internal_logs"]
-
-                    reconstructed_todo_lists[channel_id][user_id].append(task)
+                reconstructed_todo_lists[channel_id].append(task)
 
         todo_lists = reconstructed_todo_lists
         return True
@@ -111,15 +108,17 @@ class Task:
     status: str
     logs: list[str]
     internal_logs: list[tuple[str, str, str]]  # (timestamp, user, log)
+    creator: str
 
     def __init__(
-        self, ctx: commands.Context, id: int, title: str, status: str, logs: list[str]
+        self, ctx: commands.Context, id: int, title: str, status: str, logs: list[str], creator: str = None
     ):
         self.id = id
         self.title = title
         self.status = status
         self.logs = logs
         self.internal_logs = []
+        self.creator = creator or ctx.author.name
         self.add_internal_log(ctx, TaskCreated)
 
     def add_internal_log(self, ctx: commands.Context, log: str):
@@ -136,7 +135,7 @@ class Task:
         self.add_internal_log(ctx, TaskStatusUpdated)
 
     def show_details(self):
-        return f"[{self.status}] {self.title} \n{'\n'.join(self.logs)}"
+        return f"[{self.status}] {self.title}\n{'\n'.join(self.logs)}"
 
     def __str__(self):
         return f"[{self.status}] {self.title}"
@@ -153,35 +152,31 @@ class ToDoList(commands.Cog):
         self.bot = bot
 
     @commands.command(
-        name="add", help="Add a task to your to-do list. Usage: !add <task>"
+        name="add", help="Add a task to the channel's to-do list. Usage: !add <task>"
     )
     async def add_task(self, ctx, *, task: str):
-        user_id = ctx.author.id
         channel_id = ctx.channel.id
-        # Create a new list if user does not have one.
+        # Create a new list if channel does not have one
         if channel_id not in todo_lists:
-            todo_lists[channel_id] = {}
-        if user_id not in todo_lists[channel_id]:
-            todo_lists[channel_id][user_id] = []
+            todo_lists[channel_id] = []
 
-        t = Task(ctx, len(todo_lists[channel_id][user_id]), task, "pending", [])
-        todo_lists[channel_id][user_id].append(t)
+        t = Task(ctx, len(todo_lists[channel_id]), task, "pending", [])
+        todo_lists[channel_id].append(t)
 
-        await ctx.send(f"Task added:\n**{task}**")
+        await ctx.send(f"Task added by {ctx.author.name}:\n**{task}**")
         await save_changes(ctx)
 
     @commands.command(
-        name="list", help="List all tasks in your to-do list. Usage: !list"
+        name="list", help="List all tasks in the channel's to-do list. Usage: !list"
     )
     async def list_tasks(self, ctx):
         channel_id = ctx.channel.id
-        user_id = ctx.author.id
-        tasks = todo_lists.get(channel_id, {}).get(user_id, [])
+        tasks = todo_lists.get(channel_id, [])
         if not tasks:
-            await ctx.send("You have no tasks in your to-do list.")
+            await ctx.send("There are no tasks in this channel's to-do list.")
             return
 
-        response = "**Your To-Do List:**\n"
+        response = "**Channel To-Do List:**\n"
         for idx, task in enumerate(tasks, start=1):
             response += f"{idx}. {task}\n"
         await ctx.send(response)
@@ -191,55 +186,51 @@ class ToDoList(commands.Cog):
     )
     async def done_task(self, ctx, task_number: int):
         channel_id = ctx.channel.id
-        user_id = ctx.author.id
-        tasks = todo_lists.get(channel_id, {}).get(user_id, [])
+        tasks = todo_lists.get(channel_id, [])
         if 0 < task_number <= len(tasks):
             removed = tasks.pop(task_number - 1)
-            await ctx.send(f"Marked task as done:\n**{removed}**")
+            await ctx.send(f"Task marked as done by {ctx.author.name}:\n**{removed}**")
             await save_changes(ctx)
         else:
-            await ctx.send("Invalid task number. Please check your list using !list.")
+            await ctx.send("Invalid task number. Please check the list using !list.")
 
     @commands.command(name="close", help="Close a task. Usage: !close <task number>")
     async def close_task(self, ctx, task_number: int):
         channel_id = ctx.channel.id
-        user_id = ctx.author.id
-        tasks = todo_lists.get(channel_id, {}).get(user_id, [])
+        tasks = todo_lists.get(channel_id, [])
         if 0 < task_number <= len(tasks):
             t = tasks[task_number - 1]
             t.set_status(ctx, "closed")
-            await ctx.send(f"Closed task:\n**{t}**")
+            await ctx.send(f"Task closed by {ctx.author.name}:\n**{t}**")
             await save_changes(ctx)
         else:
-            await ctx.send("Invalid task number. Please check your list using !list.")
+            await ctx.send("Invalid task number. Please check the list using !list.")
 
     @commands.command(
         name="log", help="Add a log to a task. Usage: !log <task number> <log>"
     )
     async def log_task(self, ctx, task_number: int, *, log: str):
         channel_id = ctx.channel.id
-        user_id = ctx.author.id
-        tasks = todo_lists.get(channel_id, {}).get(user_id, [])
+        tasks = todo_lists.get(channel_id, [])
         if 0 < task_number <= len(tasks):
             t = tasks[task_number - 1]
             t.add_log(ctx, log)
-            await ctx.send(f"Added log to task:\n{t.show_details()}")
+            await ctx.send(f"Log added to task by {ctx.author.name}:\n{t.show_details()}")
             await save_changes(ctx)
         else:
-            await ctx.send("Invalid task number. Please check your list using !list.")
+            await ctx.send("Invalid task number. Please check the list using !list.")
 
     @commands.command(
         name="details", help="Show details of a task. Usage: !details <task number>"
     )
     async def details_task(self, ctx, task_number: int):
         channel_id = ctx.channel.id
-        user_id = ctx.author.id
-        tasks = todo_lists.get(channel_id, {}).get(user_id, [])
+        tasks = todo_lists.get(channel_id, [])
         if 0 < task_number <= len(tasks):
             t = tasks[task_number - 1]
             await ctx.send(f"Details of task:\n{t.show_details()}")
         else:
-            await ctx.send("Invalid task number. Please check your list using !list.")
+            await ctx.send("Invalid task number. Please check the list using !list.")
 
 
 class Bot(commands.Cog):
@@ -251,7 +242,7 @@ class Bot(commands.Cog):
     @commands.command(name="save", help="Manually save your to-do lists. Usage: !save")
     async def save_command(self, ctx):
         filename = await save_changes(ctx)
-        await ctx.send(f"Your to-do lists have been saved to '{filename}'.")
+        await ctx.send(f"The to-do lists have been saved to '{filename}'.")
 
     @commands.command(
         name="load", help="Load to-do lists from a JSON file. Usage: !load <filename>"
@@ -281,12 +272,11 @@ class Bot(commands.Cog):
         else:
             await ctx.send("No saved to-do list files found.")
 
-    @commands.command(name="clear", help="Clear your to-do list. Usage: !clear")
+    @commands.command(name="clear", help="Clear the channel's to-do list. Usage: !clear")
     async def clear_tasks(self, ctx):
         channel_id = ctx.channel.id
-        user_id = ctx.author.id
-        todo_lists[channel_id][user_id] = []
-        await ctx.send("Your to-do list has been cleared.")
+        todo_lists[channel_id] = []
+        await ctx.send(f"The channel's to-do list has been cleared by {ctx.author.name}.")
         await save_changes(ctx)
 
 
