@@ -10,11 +10,9 @@
         pkgs = import nixpkgs { inherit system; };
         pythonBasics =  pkgs.python3.withPackages (ps: with ps; [
           discordpy
-          python-dotenv
         ]);
         pythonEnv = pkgs.python3.withPackages (ps: with ps; [
           discordpy
-          python-dotenv
           ruff
         ]);
       in
