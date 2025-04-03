@@ -12,10 +12,10 @@
           discordpy
           python-dotenv
         ]);
-
-        pythonEnv =pythonBasics ++ pkgs.python3.withPackages (ps: with ps; [
+        pythonEnv = pkgs.python3.withPackages (ps: with ps; [
+          discordpy
+          python-dotenv
           ruff
-          pyright
         ]);
       in
       {
@@ -57,8 +57,9 @@
         };
 
        devShell = pkgs.mkShell {
-         name = "todord-dev";
-         buildInputs = [ pythonEnv self.packages.${system}.todord ];
+         name = "todord-dev-env";
+         packages = [self.packages.${system}.todord] ;
+         buildInputs = [ pythonEnv ];
          shellHook = ''
            export PATH=${pythonEnv}/bin:${pkgs.git}/bin:$PATH
            echo "Todord development environment activated"
