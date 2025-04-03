@@ -3,7 +3,24 @@ import json
 import discord
 import os
 import uuid
+import argparse
+from pathlib import Path
 from discord.ext import commands
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description="Todord - A Discord To-Do List Bot")
+parser.add_argument(
+    "--data_dir",
+    default="./data",
+    help="Directory to store data files (default: ./data)",
+)
+args = parser.parse_args()
+
+# Ensure data directory exists
+data_dir = Path(args.data_dir)
+if not data_dir.exists():
+    data_dir.mkdir(parents=True)
+    print(f"Created data directory: {data_dir}")
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 if not TOKEN:
@@ -28,7 +45,8 @@ async def save_todo_lists(session_id: str):
     filename = (
         f"todo_lists_{session_id}_{current_time.strftime('%Y-%m-%d_%H-%M-%S')}.json"
     )
-    with open(filename, "w") as f:
+    filepath = data_dir / filename
+    with open(filepath, "w") as f:
         json.dump(todo_lists, f, default=lambda o: o.__dict__, indent=2)
     return filename
 
@@ -43,7 +61,8 @@ async def save_changes(ctx):
 async def load_todo_lists_from_file(ctx, filename):
     global todo_lists
     try:
-        with open(filename, "r") as f:
+        filepath = data_dir / filename
+        with open(filepath, "r") as f:
             data = json.load(f)
 
         # Convert raw data back to Task objects
@@ -148,7 +167,7 @@ class ToDoList(commands.Cog):
         t = Task(ctx, len(todo_lists[channel_id][user_id]), task, "pending", [])
         todo_lists[channel_id][user_id].append(t)
 
-        await ctx.send(f"Task added: **{task}**")
+        await ctx.send(f"Task added:\n**{task}**")
         await save_changes(ctx)
 
     @commands.command(
@@ -176,7 +195,7 @@ class ToDoList(commands.Cog):
         tasks = todo_lists.get(channel_id, {}).get(user_id, [])
         if 0 < task_number <= len(tasks):
             removed = tasks.pop(task_number - 1)
-            await ctx.send(f"Marked task as done: **{removed}**")
+            await ctx.send(f"Marked task as done:\n**{removed}**")
             await save_changes(ctx)
         else:
             await ctx.send("Invalid task number. Please check your list using !list.")
@@ -189,7 +208,7 @@ class ToDoList(commands.Cog):
         if 0 < task_number <= len(tasks):
             t = tasks[task_number - 1]
             t.set_status(ctx, "closed")
-            await ctx.send(f"Closed task: **{t}**")
+            await ctx.send(f"Closed task:\n**{t}**")
             await save_changes(ctx)
         else:
             await ctx.send("Invalid task number. Please check your list using !list.")
@@ -204,7 +223,7 @@ class ToDoList(commands.Cog):
         if 0 < task_number <= len(tasks):
             t = tasks[task_number - 1]
             t.add_log(ctx, log)
-            await ctx.send(f"Added log to task: {t.show_details()}")
+            await ctx.send(f"Added log to task:\n{t.show_details()}")
             await save_changes(ctx)
         else:
             await ctx.send("Invalid task number. Please check your list using !list.")
@@ -218,7 +237,7 @@ class ToDoList(commands.Cog):
         tasks = todo_lists.get(channel_id, {}).get(user_id, [])
         if 0 < task_number <= len(tasks):
             t = tasks[task_number - 1]
-            await ctx.send(f"Details of task: {t.show_details()}")
+            await ctx.send(f"Details of task:\n{t.show_details()}")
         else:
             await ctx.send("Invalid task number. Please check your list using !list.")
 
@@ -252,10 +271,10 @@ class Bot(commands.Cog):
     async def list_files_command(self, ctx):
         files = [
             f
-            for f in os.listdir(".")
+            for f in os.listdir(data_dir)
             if f.startswith("todo_lists_") and f.endswith(".json")
         ]
-        files.sort(key=lambda x: os.path.getctime(x))
+        files.sort(key=lambda x: os.path.getctime(str(data_dir / x)))
         if files:
             files_list = "\n".join(files)
             await ctx.send(f"**Available to-do list files:**\n{files_list}")
