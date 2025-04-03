@@ -19,53 +19,62 @@
         ]);
       in
       {
-        packages.todord = pkgs.stdenv.mkDerivation {
-          pname = "todord";
-          version = "0.0.1";
-          src = ./.;
+        packages = {
+          todord = pkgs.stdenv.mkDerivation {
+            pname = "todord";
+            version = "0.0.1";
+            src = ./.;
 
-          nativeBuildInputs = [ pkgs.makeWrapper ];
-          buildInputs = [ pythonBasics pkgs.git ];
+            nativeBuildInputs = [ pkgs.makeWrapper ];
+            buildInputs = [ pythonBasics pkgs.git ];
 
-          dontBuild = true;
+            dontBuild = true;
 
-          installPhase = ''
-            echo "Contents of source directory:"
-            ls -la
-            mkdir -p $out/bin $out/lib
-            if [ -f "todord.py" ]; then
-              cp todord.py $out/lib/
-              makeWrapper ${pythonBasics}/bin/python $out/bin/todord \
-                --add-flags "$out/lib/todord.py" \
-                --prefix PATH : ${pkgs.git}/bin
-            else
-              echo "ERROR: todord.py not found, adding it..."
-              exit 1
-            fi
-          '';
+            installPhase = ''
+              echo "Contents of source directory:"
+              ls -la
+              mkdir -p $out/bin $out/lib
+              if [ -f "todord.py" ]; then
+                cp todord.py $out/lib/
+                makeWrapper ${pythonBasics}/bin/python $out/bin/todord \
+                  --add-flags "$out/lib/todord.py" \
+                  --prefix PATH : ${pkgs.git}/bin
+              else
+                echo "ERROR: todord.py not found, adding it..."
+                exit 1
+              fi
+            '';
 
-          shellHook = ''
-            export PATH=${pythonBasics}/bin:${pkgs.git}/bin:$PATH
-          '';
+            shellHook = ''
+              export PATH=${pythonBasics}/bin:${pkgs.git}/bin:$PATH
+            '';
+          };
+          
+          default = self.packages.${system}.todord;
         };
 
-        defaultPackage = self.packages.${system}.todord;
-
-        defaultApp = {
-          type = "app";
-          program = "${self.packages.${system}.todord}/bin/todord";
+        apps = {
+          todord = {
+            type = "app";
+            program = "${self.packages.${system}.todord}/bin/todord";
+            meta = {
+              description = "Todord Bot App";
+            };
+          };
+          
+          default = self.apps.${system}.todord;
         };
 
-       devShell = pkgs.mkShell {
-         name = "todord-dev-env";
-         packages = [self.packages.${system}.todord] ;
-         buildInputs = [ pythonEnv ];
-         shellHook = ''
-           export PATH=${pythonEnv}/bin:${pkgs.git}/bin:$PATH
-           echo "Todord development environment activated"
-         '';
-       };
-
-
+        devShells = {
+          default = pkgs.mkShell {
+            name = "todord-dev-env";
+            packages = [self.packages.${system}.todord] ;
+            buildInputs = [ pythonEnv ];
+            shellHook = ''
+              export PATH=${pythonEnv}/bin:${pkgs.git}/bin:$PATH
+              echo "Todord development environment activated"
+            '';
+          };
+        };
       });
 }
