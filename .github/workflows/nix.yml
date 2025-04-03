@@ -46,9 +46,9 @@ jobs:
           echo "$output"
 
           # Check if the output contains expected text
-          if echo "$output" | grep -q '<COMMAND>'; then
-            echo "✓ Help text contains '<COMMAND>' as expected"
+          if echo "$output" | grep -q 'DATA_DIR'; then
+            echo "✓ Help text contains 'DATA_DIR' as expected"
           else
-            echo "✗ Help text does not contain '<COMMAND>'"
+            echo "✗ Help text does not contain 'DATA_DIR'"
             exit 1
           fi
