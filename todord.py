@@ -12,7 +12,7 @@ import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union, Any, TypeVar, cast
+from typing import Dict, List, Optional, Tuple, Union
 
 import discord
 from discord.ext import commands
@@ -29,6 +29,7 @@ logger = logging.getLogger("todord")
 
 class TaskEvent:
     """Constants for task events."""
+
     CREATED = "task_created"
     STATUS_UPDATED = "task_status_updated"
     LOG_ADDED = "task_log_added"
@@ -39,16 +40,16 @@ class Task:
     """Represents a task in a to-do list."""
 
     def __init__(
-        self, 
-        ctx: commands.Context, 
-        id: int, 
-        title: str, 
-        status: str, 
+        self,
+        ctx: commands.Context,
+        id: int,
+        title: str,
+        status: str,
         logs: Optional[List[str]] = None,
-        creator: Optional[str] = None
+        creator: Optional[str] = None,
     ) -> None:
         """Initialize a new task.
-        
+
         Args:
             ctx: The command context
             id: The task ID
@@ -65,9 +66,11 @@ class Task:
         self.creator: str = creator or ctx.author.name
         self.add_internal_log(ctx, TaskEvent.CREATED)
 
-    def add_internal_log(self, ctx: commands.Context, log: str, extra_info: str = "") -> None:
+    def add_internal_log(
+        self, ctx: commands.Context, log: str, extra_info: str = ""
+    ) -> None:
         """Add an internal log entry.
-        
+
         Args:
             ctx: The command context
             log: The log message
@@ -80,62 +83,72 @@ class Task:
 
     def add_log(self, ctx: commands.Context, log: str) -> None:
         """Add a user log entry.
-        
+
         Args:
             ctx: The command context
             log: The log message
         """
         self.logs.append(log)
-        self.add_internal_log(ctx, TaskEvent.LOG_ADDED, f"'{log[:30]}{'...' if len(log) > 30 else ''}'")
+        self.add_internal_log(
+            ctx, TaskEvent.LOG_ADDED, f"'{log[:30]}{'...' if len(log) > 30 else ''}'"
+        )
 
     def set_status(self, ctx: commands.Context, status: str) -> None:
         """Set the task status.
-        
+
         Args:
             ctx: The command context
             status: The new status
         """
         old_status = self.status
         self.status = status
-        self.add_internal_log(ctx, TaskEvent.STATUS_UPDATED, f"from '{old_status}' to '{status}'")
-        
+        self.add_internal_log(
+            ctx, TaskEvent.STATUS_UPDATED, f"from '{old_status}' to '{status}'"
+        )
+
     def set_title(self, ctx: commands.Context, title: str) -> None:
         """Set the task title.
-        
+
         Args:
             ctx: The command context
             title: The new title
         """
         old_title = self.title
         self.title = title
-        self.add_internal_log(ctx, TaskEvent.TITLE_EDITED, f"from '{old_title[:30]}{'...' if len(old_title) > 30 else ''}' to '{title[:30]}{'...' if len(title) > 30 else ''}'")
+        self.add_internal_log(
+            ctx,
+            TaskEvent.TITLE_EDITED,
+            f"from '{old_title[:30]}{'...' if len(old_title) > 30 else ''}' to '{title[:30]}{'...' if len(title) > 30 else ''}'",
+        )
 
     def show_details(self) -> str:
         """Get a detailed representation of the task.
-        
+
         Returns:
             A formatted string with task details including history
         """
         # Start with the basic task info
-        details = [f"[{self.status}] {self.title}"]
-        
+        details = [f"**[{self.status}] {self.title}**"]
+
         # Add creator info
         details.append(f"Created by: {self.creator}")
-        
+
         # Add task logs if any
         if self.logs:
             details.append("\n**Logs:**")
             for i, log in enumerate(self.logs, 1):
                 details.append(f"{i}. {log}")
-        
+
         # Add history from internal logs
         if self.internal_logs:
             details.append("\n**History:**")
             for timestamp, user, action in self.internal_logs:
                 # Extract the basic action type
                 action_type = action.split(":", 1)[0] if ":" in action else action
-                action_details = action.split(":", 1)[1].strip() if ":" in action else ""
-                
+                action_details = (
+                    action.split(":", 1)[1].strip() if ":" in action else ""
+                )
+
                 # Convert action code to readable text
                 readable_action = action_type
                 if action_type == TaskEvent.CREATED:
@@ -146,18 +159,18 @@ class Task:
                     readable_action = f"Added log {action_details}"
                 elif action_type == TaskEvent.TITLE_EDITED:
                     readable_action = f"Edited title {action_details}"
-                
+
                 details.append(f"• {timestamp} - {user}: {readable_action}")
-        
+
         return "\n".join(details)
 
     def __str__(self) -> str:
         """Get a string representation of the task.
-        
+
         Returns:
             A formatted string with basic task info
         """
-        return f"[{self.status}] {self.title}"
+        return f"**[{self.status}] {self.title}**"
 
 
 class StorageManager:
@@ -165,7 +178,7 @@ class StorageManager:
 
     def __init__(self, data_dir: Union[str, Path], session_id: str) -> None:
         """Initialize the storage manager.
-        
+
         Args:
             data_dir: Directory to store data files
             session_id: Current session ID
@@ -181,29 +194,29 @@ class StorageManager:
 
     async def save(self, ctx: commands.Context) -> str:
         """Save the current state of todo lists.
-        
+
         Args:
             ctx: The command context
-            
+
         Returns:
             The filename of the saved file
         """
         current_time = datetime.now()
         filename = f"todo_lists_{self.session_id}_{current_time.strftime('%Y-%m-%d_%H-%M-%S')}.json"
         filepath = self.data_dir / filename
-        
+
         with open(filepath, "w") as f:
             json.dump(self.todo_lists, f, default=lambda o: o.__dict__, indent=2)
-        
+
         return filename
 
     async def load(self, ctx: commands.Context, filename: str) -> bool:
         """Load todo lists from a file.
-        
+
         Args:
             ctx: The command context
             filename: The file to load from
-            
+
         Returns:
             True if successful, False otherwise
         """
@@ -214,9 +227,11 @@ class StorageManager:
 
             # Convert raw data back to Task objects
             reconstructed_todo_lists: Dict[int, List[Task]] = {}
-            
+
             for channel_id, tasks in data.items():
-                channel_id_int = int(channel_id)  # JSON keys are strings, convert back to int
+                channel_id_int = int(
+                    channel_id
+                )  # JSON keys are strings, convert back to int
                 reconstructed_todo_lists[channel_id_int] = []
 
                 for task_data in tasks:
@@ -227,7 +242,7 @@ class StorageManager:
                         task_data["title"],
                         task_data["status"],
                         task_data.get("logs", []),
-                        task_data.get("creator", "Unknown")
+                        task_data.get("creator", "Unknown"),
                     )
 
                     # Restore internal logs if they exist
@@ -238,19 +253,20 @@ class StorageManager:
 
             self.todo_lists = reconstructed_todo_lists
             return True
-            
+
         except Exception as e:
             logger.error(f"Error loading todo lists: {e}")
             return False
-            
+
     def list_saved_files(self) -> List[str]:
         """List all saved todo list files.
-        
+
         Returns:
             A list of filenames
         """
         files = [
-            f for f in os.listdir(self.data_dir)
+            f
+            for f in os.listdir(self.data_dir)
             if f.startswith("todo_lists_") and f.endswith(".json")
         ]
         files.sort(key=lambda x: os.path.getctime(str(self.data_dir / x)))
@@ -259,138 +275,133 @@ class StorageManager:
 
 class CustomHelpCommand(commands.HelpCommand):
     """Custom help command implementation for better readability."""
-    
+
     def __init__(self):
         super().__init__(
             command_attrs={
                 "help": "Shows the bot's commands and their descriptions",
-                "cooldown": commands.CooldownMapping.from_cooldown(1, 3.0, commands.BucketType.member)
+                "cooldown": commands.CooldownMapping.from_cooldown(
+                    1, 3.0, commands.BucketType.member
+                ),
             }
         )
-    
+
     async def send_bot_help(self, mapping):
         """Send the bot help page."""
         embed = discord.Embed(
-            title="Todord - To-Do List Commands",
-            description="Here are all the available commands:",
-            color=discord.Color.blue()
+            title="Todord - !help Command",
+            color=discord.Color.blue(),
         )
-        
-        for cog, commands in mapping.items():
+
+        for cog, cmds in mapping.items():
             # Filter commands that can be run
-            filtered = await self.filter_commands(commands, sort=True)
+            filtered = await self.filter_commands(cmds, sort=True)
             if filtered:
                 # Get cog name (or "Other Commands" if no cog)
                 name = getattr(cog, "qualified_name", "Other Commands")
-                
+
                 # Add cog description if available
                 cog_description = ""
                 if cog and cog.description:
-                    cog_description = f"*{cog.description}*\n"
-                
+                    cog_description = f"{cog.description}\n"
+
                 # Create command list for this category
                 command_list = []
                 for command in filtered:
                     name_with_aliases = f"`!{command.name}`"
                     if command.aliases:
-                        aliases = ", ".join(f"`!{alias}`" for alias in command.aliases)
-                        name_with_aliases = f"{name_with_aliases} (aliases: {aliases})"
-                    command_list.append(f"**{name_with_aliases}**\n{command.short_doc}")
-                
+                        aliases = ", ".join(
+                            f"`!{alias}`" for alias in command.aliases
+                        )
+                        name_with_aliases = f"{name_with_aliases}, {aliases}"
+                    command_list.append(f"**{name_with_aliases}**: {command.short_doc}")
+
                 # Add field to embed
                 if command_list:
+                    # add an embed field to give space for the cog title and desc
                     embed.add_field(
-                        name=f"📋 {name}",
-                        value=f"{cog_description}{'⎯' * 20}\n" + "\n\n".join(command_list),
-                        inline=False
+                        name="\n",
+                        value="\n",
+                        inline=False,
                     )
-        
+                    embed.add_field(
+                        name=f"📋 **{name}** - {cog_description}",
+                        value=f"{'---' * 25}\n"
+                        + "\n".join(command_list),
+                        inline=False,
+                    )
+
         # Add usage information
         embed.set_footer(text="Type !help <command> for detailed info on a command.")
-        
+
         # Send the embed
         await self.get_destination().send(embed=embed)
-    
+
     async def send_command_help(self, command):
         """Send help for a specific command."""
         embed = discord.Embed(
-            title=f"Command: !{command.name}",
-            color=discord.Color.green()
+            title=f"Command: !{command.name}", color=discord.Color.green()
         )
-        
+
         # Add aliases if any
         if command.aliases:
             aliases = ", ".join(f"`!{alias}`" for alias in command.aliases)
-            embed.add_field(
-                name="Aliases",
-                value=aliases,
-                inline=False
-            )
-        
+            embed.add_field(name="Aliases", value=aliases, inline=False)
+
         # Add description
         if command.help:
-            embed.add_field(
-                name="Description",
-                value=command.help,
-                inline=False
-            )
-        
+            embed.add_field(name="Description", value=command.help, inline=False)
+
         # Add usage
         usage = f"`!{command.name}"
         if command.signature:
             usage += f" {command.signature}"
         usage += "`"
-        
-        embed.add_field(
-            name="Usage",
-            value=usage,
-            inline=False
-        )
-        
+
+        embed.add_field(name="Usage", value=usage, inline=False)
+
         await self.get_destination().send(embed=embed)
-    
+
     async def send_cog_help(self, cog):
         """Send help for a specific category/cog."""
         embed = discord.Embed(
             title=f"Category: {cog.qualified_name}",
             description=cog.description or "No description provided.",
-            color=discord.Color.gold()
+            color=discord.Color.gold(),
         )
-        
+
         # Get commands in this cog
         filtered = await self.filter_commands(cog.get_commands(), sort=True)
-        
+
         # Add commands to embed
         for command in filtered:
             name_with_aliases = f"`!{command.name}`"
             if command.aliases:
                 aliases = ", ".join(f"`!{alias}`" for alias in command.aliases)
                 name_with_aliases = f"{name_with_aliases} (aliases: {aliases})"
-            
+
             embed.add_field(
                 name=name_with_aliases,
                 value=command.short_doc or "No description provided.",
-                inline=False
+                inline=False,
             )
-        
+
         await self.get_destination().send(embed=embed)
 
     async def send_error_message(self, error):
         """Send an error message."""
         embed = discord.Embed(
-            title="Error",
-            description=error,
-            color=discord.Color.red()
+            title="Error", description=error, color=discord.Color.red()
         )
         await self.get_destination().send(embed=embed)
 
 
 class TodoList(commands.Cog):
-    """Task management commands for creating and tracking your to-do items in this channel."""
+    """Task management commands."""
 
     def __init__(self, bot: commands.Bot, storage: StorageManager) -> None:
         """Initialize the TodoList cog.
-        
+
         Args:
             bot: The Discord bot
             storage: The storage manager
@@ -398,20 +409,29 @@ class TodoList(commands.Cog):
         self.bot = bot
         self.storage = storage
 
+    # Helper to create standard embeds
+    def _create_embed(
+        self, ctx: commands.Context, title: str, description: str, color: discord.Color
+    ) -> discord.Embed:
+        """Create a standardized Discord embed."""
+        embed = discord.Embed(title=title, description=description, color=color)
+        embed.set_footer(text=f"Requested by {ctx.author.name}")
+        return embed
+
     @commands.command(
-        name="add", 
+        name="add",
         aliases=["a"],
-        help="Create a new task and add it to the channel's to-do list."
+        help="Create a new task and add it to the channel's to-do list.",
     )
     async def add_task(self, ctx: commands.Context, *, task: str) -> None:
         """Add a task to the channel's to-do list.
-        
+
         Args:
             ctx: The command context
             task: The task description
         """
         channel_id = ctx.channel.id
-        
+
         # Create a new list if channel does not have one
         if channel_id not in self.storage.todo_lists:
             self.storage.todo_lists[channel_id] = []
@@ -420,95 +440,144 @@ class TodoList(commands.Cog):
         new_task = Task(ctx, task_id, task, "pending", [])
         self.storage.todo_lists[channel_id].append(new_task)
 
-        await ctx.reply(f"Task added by {ctx.author.name}:\n**{task}**")
+        embed = self._create_embed(
+            ctx, "✅ Task Added", f"**{new_task.title}**", discord.Color.green()
+        )
+        await ctx.reply(embed=embed)
         await self.storage.save(ctx)
 
     @commands.command(
-        name="list", 
+        name="list",
         aliases=["ls", "l"],
-        help="Display all current tasks in this channel with their status."
+        help="Display all current tasks in this channel with their status.",
     )
     async def list_tasks(self, ctx: commands.Context) -> None:
         """List all tasks in the channel's to-do list.
-        
+
         Args:
             ctx: The command context
         """
         channel_id = ctx.channel.id
         tasks = self.storage.todo_lists.get(channel_id, [])
-        
+
         if not tasks:
-            await ctx.reply("There are no tasks in this channel's to-do list.")
+            embed = self._create_embed(
+                ctx,
+                "ℹ️ Info",
+                "There are no tasks in this channel's to-do list.",
+                discord.Color.blue(),
+            )
+            await ctx.reply(embed=embed)
             return
 
-        response = "**Channel To-Do List:**\n"
+        response = ""
         for idx, task in enumerate(tasks, start=1):
             response += f"{idx}. {task}\n"
-            
-        await ctx.reply(response)
+
+        embed = self._create_embed(
+            ctx, "📋 Channel To-Do List", response, discord.Color.blue()
+        )
+        await ctx.reply(embed=embed)
 
     @commands.command(
-        name="done", 
+        name="done",
         aliases=["d"],
-        help="Mark a task as completed and remove it from the active list."
+        help="Mark a task as completed and remove it from the active list.",
     )
     async def done_task(self, ctx: commands.Context, task_number: int) -> None:
         """Mark a task as done.
-        
+
         Args:
             ctx: The command context
             task_number: The task number to mark as done
         """
         channel_id = ctx.channel.id
         tasks = self.storage.todo_lists.get(channel_id, [])
-        
+
         if not tasks:
-            await ctx.reply("There are no tasks in this channel's to-do list.")
+            embed = self._create_embed(
+                ctx,
+                "ℹ️ Info",
+                "There are no tasks in this channel's to-do list.",
+                discord.Color.blue(),
+            )
+            await ctx.reply(embed=embed)
             return
-            
+
         if 0 < task_number <= len(tasks):
             removed = tasks.pop(task_number - 1)
             removed.set_status(ctx, "done")
-            await ctx.reply(f"Task marked as done by {ctx.author.name}:\n**{removed}**")
+
+            embed = self._create_embed(
+                ctx, "✔️ Task Marked as Done", f"**{removed}**", discord.Color.green()
+            )
+            await ctx.reply(embed=embed)
             await self.storage.save(ctx)
         else:
-            await ctx.reply("Invalid task number. Please check the list using !list.")
+            embed = self._create_embed(
+                ctx,
+                "❌ Error",
+                f"Invalid task number: {task_number}. Use `!list` to see valid numbers.",
+                discord.Color.red(),
+            )
+            await ctx.reply(embed=embed)
 
     @commands.command(
-        name="close", 
+        name="close",
         aliases=["c"],
-        help="Close a task without completing it and remove it from the active list."
+        help="Close a task without completing it and remove it from the active list.",
     )
     async def close_task(self, ctx: commands.Context, task_number: int) -> None:
         """Close a task.
-        
+
         Args:
             ctx: The command context
             task_number: The task number to close
         """
         channel_id = ctx.channel.id
         tasks = self.storage.todo_lists.get(channel_id, [])
-        
+
         if not tasks:
-            await ctx.reply("There are no tasks in this channel's to-do list.")
+            embed = self._create_embed(
+                ctx,
+                "ℹ️ Info",
+                "There are no tasks in this channel's to-do list.",
+                discord.Color.blue(),
+            )
+            await ctx.reply(embed=embed)
             return
-            
+
         if 0 < task_number <= len(tasks):
             removed = tasks.pop(task_number - 1)
             removed.set_status(ctx, "closed")
-            await ctx.reply(f"Task closed by {ctx.author.name}:\n**{removed}**")
+
+            embed = self._create_embed(
+                ctx,
+                "✖️ Task Closed",
+                f"**{removed}**",
+                discord.Color.orange(),  # Using orange for closed might be better? Or green? Let's try orange.
+            )
+            await ctx.reply(embed=embed)
             await self.storage.save(ctx)
         else:
-            await ctx.reply("Invalid task number. Please check the list using !list.")
+            embed = self._create_embed(
+                ctx,
+                "❌ Error",
+                f"Invalid task number: {task_number}. Use `!list` to see valid numbers.",
+                discord.Color.red(),
+            )
+            await ctx.reply(embed=embed)
 
     @commands.command(
-        name="log", 
+        name="log",
         aliases=["lg"],
-        help="Add a progress note or comment to an existing task."
+        help="Add a progress note or comment to an existing task.",
     )
-    async def log_task(self, ctx: commands.Context, task_number: int, *, log: str) -> None:
+    async def log_task(
+        self, ctx: commands.Context, task_number: int, *, log: str
+    ) -> None:
         """Add a log to a task.
-        
+
         Args:
             ctx: The command context
             task_number: The task number to add a log to
@@ -516,55 +585,92 @@ class TodoList(commands.Cog):
         """
         channel_id = ctx.channel.id
         tasks = self.storage.todo_lists.get(channel_id, [])
-        
+
         if not tasks:
-            await ctx.reply("There are no tasks in this channel's to-do list.")
+            embed = self._create_embed(
+                ctx,
+                "ℹ️ Info",
+                "There are no tasks in this channel's to-do list.",
+                discord.Color.blue(),
+            )
+            await ctx.reply(embed=embed)
             return
-            
+
         if 0 < task_number <= len(tasks):
             task = tasks[task_number - 1]
             task.add_log(ctx, log)
-            await ctx.reply(f"Log added to task by {ctx.author.name}:\n{task.show_details()}")
+
+            embed = self._create_embed(
+                ctx,
+                f"📝 Log Added to Task #{task_number}",
+                f"Log: '{log}'\n\n**Current Task Details:**\n{task.show_details()}",
+                discord.Color.green(),
+            )
+            # Make description shorter if details are long? Maybe truncate show_details?
+            # Let's keep it as is for now, but consider if it gets too spammy.
+            await ctx.reply(embed=embed)
             await self.storage.save(ctx)
         else:
-            await ctx.reply("Invalid task number. Please check the list using !list.")
+            embed = self._create_embed(
+                ctx,
+                "❌ Error",
+                f"Invalid task number: {task_number}. Use `!list` to see valid numbers.",
+                discord.Color.red(),
+            )
+            await ctx.reply(embed=embed)
 
     @commands.command(
-        name="details", 
+        name="details",
         aliases=["det", "info"],
-        help="Show complete information about a task including its history and logs."
+        help="Show complete information about a task including its history and logs.",
     )
     async def details_task(self, ctx: commands.Context, task_number: int) -> None:
         """Show details of a task.
-        
+
         Args:
             ctx: The command context
             task_number: The task number to show details for
         """
         channel_id = ctx.channel.id
         tasks = self.storage.todo_lists.get(channel_id, [])
-        
+
         if not tasks:
-            await ctx.reply("There are no tasks in this channel's to-do list.")
+            embed = self._create_embed(
+                ctx,
+                "ℹ️ Info",
+                "There are no tasks in this channel's to-do list.",
+                discord.Color.blue(),
+            )
+            await ctx.reply(embed=embed)
             return
-            
+
         if 0 < task_number <= len(tasks):
             task = tasks[task_number - 1]
             details = task.show_details()
-            
-            # Send the task details in a nicely formatted message
-            await ctx.reply(f"**Task #{task_number} Details:**\n{details}")
+
+            embed = self._create_embed(
+                ctx, f"🔍 Task #{task_number} Details", details, discord.Color.blue()
+            )
+            await ctx.reply(embed=embed)
         else:
-            await ctx.reply("Invalid task number. Please check the list using !list.")
+            embed = self._create_embed(
+                ctx,
+                "❌ Error",
+                f"Invalid task number: {task_number}. Use `!list` to see valid numbers.",
+                discord.Color.red(),
+            )
+            await ctx.reply(embed=embed)
 
     @commands.command(
-        name="edit", 
+        name="edit",
         aliases=["e"],
-        help="Change the title/description of an existing task."
+        help="Change the title/description of an existing task.",
     )
-    async def edit_task(self, ctx: commands.Context, task_number: int, *, new_title: str) -> None:
+    async def edit_task(
+        self, ctx: commands.Context, task_number: int, *, new_title: str
+    ) -> None:
         """Edit a task's title.
-        
+
         Args:
             ctx: The command context
             task_number: The task number to edit
@@ -572,27 +678,46 @@ class TodoList(commands.Cog):
         """
         channel_id = ctx.channel.id
         tasks = self.storage.todo_lists.get(channel_id, [])
-        
+
         if not tasks:
-            await ctx.reply("There are no tasks in this channel's to-do list.")
+            embed = self._create_embed(
+                ctx,
+                "ℹ️ Info",
+                "There are no tasks in this channel's to-do list.",
+                discord.Color.blue(),
+            )
+            await ctx.reply(embed=embed)
             return
-            
+
         if 0 < task_number <= len(tasks):
             task = tasks[task_number - 1]
             old_title = task.title
             task.set_title(ctx, new_title)
-            await ctx.reply(f"Task title edited by {ctx.author.name}:\nFrom: **{old_title}**\nTo: **{new_title}**")
+
+            embed = self._create_embed(
+                ctx,
+                "✏️ Task Edited",
+                f"Task #{task_number} title changed:\n**From:** {old_title}\n**To:** {new_title}",
+                discord.Color.green(),
+            )
+            await ctx.reply(embed=embed)
             await self.storage.save(ctx)
         else:
-            await ctx.reply("Invalid task number. Please check the list using !list.")
+            embed = self._create_embed(
+                ctx,
+                "❌ Error",
+                f"Invalid task number: {task_number}. Use `!list` to see valid numbers.",
+                discord.Color.red(),
+            )
+            await ctx.reply(embed=embed)
 
 
 class BotManagement(commands.Cog):
-    """Administrative commands for saving, loading, and managing your to-do lists."""
+    """Administrative Bot commands."""
 
     def __init__(self, bot: commands.Bot, storage: StorageManager) -> None:
         """Initialize the BotManagement cog.
-        
+
         Args:
             bot: The Discord bot
             storage: The storage manager
@@ -600,112 +725,207 @@ class BotManagement(commands.Cog):
         self.bot = bot
         self.storage = storage
 
+    # Helper to create standard embeds
+    def _create_embed(
+        self, ctx: commands.Context, title: str, description: str, color: discord.Color
+    ) -> discord.Embed:
+        """Create a standardized Discord embed."""
+        embed = discord.Embed(title=title, description=description, color=color)
+        embed.set_footer(text=f"Requested by {ctx.author.name}")
+        return embed
+
     @commands.command(
-        name="clear", 
+        name="clear",
         aliases=["clr"],
-        help="Remove all tasks from the current channel's to-do list."
+        help="Remove all tasks from the current channel's to-do list.",
     )
     async def clear_tasks(self, ctx: commands.Context) -> None:
         """Clear the channel's to-do list.
-        
+
         Args:
             ctx: The command context
         """
         channel_id = ctx.channel.id
-        
-        if channel_id in self.storage.todo_lists:
+
+        if (
+            channel_id in self.storage.todo_lists
+            and self.storage.todo_lists[channel_id]
+        ):
             self.storage.todo_lists[channel_id] = []
-            await ctx.reply(f"The channel's to-do list has been cleared by {ctx.author.name}.")
+            embed = self._create_embed(
+                ctx,
+                "🗑️ List Cleared",
+                "The channel's to-do list has been cleared.",
+                discord.Color.orange(),  # Using orange for potentially destructive actions
+            )
+            await ctx.reply(embed=embed)
             await self.storage.save(ctx)
         else:
-            await ctx.reply("There are no tasks in this channel's to-do list.")
+            embed = self._create_embed(
+                ctx,
+                "ℹ️ Info",
+                "There are no tasks in this channel's to-do list to clear.",
+                discord.Color.blue(),
+            )
+            await ctx.reply(embed=embed)
 
     @commands.command(
-        name="save", 
+        name="save",
         aliases=["s"],
-        help="Manually save the current state of all to-do lists to a file."
+        help="Manually save the current state of all to-do lists to a file.",
     )
     async def save_command(self, ctx: commands.Context) -> None:
         """Save the current to-do lists.
-        
+
         Args:
             ctx: The command context
         """
-        filename = await self.storage.save(ctx)
-        await ctx.reply(f"The to-do lists have been saved to '{filename}'.")
+        try:
+            filename = await self.storage.save(ctx)
+            embed = self._create_embed(
+                ctx,
+                "💾 Lists Saved",
+                f"The to-do lists have been saved to `{filename}`.",
+                discord.Color.green(),
+            )
+            await ctx.reply(embed=embed)
+        except Exception as e:
+            logger.error(f"Error during save command: {e}", exc_info=True)
+            embed = self._create_embed(
+                ctx,
+                "❌ Error Saving",
+                f"An error occurred while saving the lists: {e}",
+                discord.Color.red(),
+            )
+            await ctx.reply(embed=embed)
 
     @commands.command(
-        name="load", 
+        name="load",
         aliases=["ld"],
-        help="Load to-do lists from a previously saved file."
+        help="Load to-do lists from a previously saved file.",
     )
     async def load_command(self, ctx: commands.Context, filename: str) -> None:
         """Load to-do lists from a file.
-        
+
         Args:
             ctx: The command context
             filename: The file to load from
         """
+        # Basic validation to prevent path traversal
+        if ".." in filename or "/" in filename:
+            embed = self._create_embed(
+                ctx,
+                "❌ Invalid Filename",
+                "Invalid characters detected in filename.",
+                discord.Color.red(),
+            )
+            await ctx.reply(embed=embed)
+            return
+
         success = await self.storage.load(ctx, filename)
         if success:
-            await ctx.reply(f"Successfully loaded to-do lists from '{filename}'.")
-        else:
-            await ctx.reply(
-                f"Failed to load to-do lists from '{filename}'. "
-                "Make sure the file exists and is in the correct format."
+            embed = self._create_embed(
+                ctx,
+                "📂 Lists Loaded",
+                f"Successfully loaded to-do lists from `{filename}`.",
+                discord.Color.green(),
             )
+            await ctx.reply(embed=embed)
+        else:
+            embed = self._create_embed(
+                ctx,
+                "❌ Error Loading",
+                f"Failed to load lists from `{filename}`. Check the filename and ensure it's a valid save file.",
+                discord.Color.red(),
+            )
+            await ctx.reply(embed=embed)
 
     @commands.command(
         name="loadlast",
         aliases=["ll"],
-        help="Load the most recently saved to-do list file."
+        help="Load the most recently saved to-do list file.",
     )
     async def loadlast_command(self, ctx: commands.Context) -> None:
         """Load the most recent to-do list file.
-        
+
         Args:
             ctx: The command context
         """
         files = self.storage.list_saved_files()
-        
+
         if not files:
-            await ctx.reply("No saved to-do list files found.")
+            embed = self._create_embed(
+                ctx,
+                "ℹ️ No Files Found",
+                "No saved to-do list files found.",
+                discord.Color.blue(),
+            )
+            await ctx.send(embed=embed)
             return
-            
+
         # Files are already sorted by creation time, so the last one is the most recent
         most_recent_file = files[-1]
-        
+
         success = await self.storage.load(ctx, most_recent_file)
         if success:
-            await ctx.reply(f"Successfully loaded the most recent to-do lists from '{most_recent_file}'.")
-        else:
-            await ctx.reply(
-                f"Failed to load to-do lists from '{most_recent_file}'. "
-                "The file may be corrupted or in an incorrect format."
+            embed = self._create_embed(
+                ctx,
+                "📂 Last List Loaded",
+                f"Successfully loaded the most recent lists from `{most_recent_file}`.",
+                discord.Color.green(),
             )
+            await ctx.send(embed=embed)
+        else:
+            embed = self._create_embed(
+                ctx,
+                "❌ Error Loading",
+                f"Failed to load the most recent lists from `{most_recent_file}`. The file might be corrupted.",
+                discord.Color.red(),
+            )
+            await ctx.send(embed=embed)
 
     @commands.command(
-        name="list_files", 
+        name="list_files",
         aliases=["lf"],
-        help="Show all available saved to-do list files that can be loaded."
+        help="Show all available saved to-do list files that can be loaded.",
     )
     async def list_files_command(self, ctx: commands.Context) -> None:
         """List all saved to-do list files.
-        
+
         Args:
             ctx: The command context
         """
-        files = self.storage.list_saved_files()
-        if files:
-            files_list = "\n".join(files)
-            await ctx.reply(f"**Available to-do list files:**\n{files_list}")
-        else:
-            await ctx.reply("No saved to-do list files found.")
+        try:
+            files = self.storage.list_saved_files()
+            if files:
+                # Format files nicely, potentially with numbering
+                files_list = "\n".join([f"{i + 1}. `{f}`" for i, f in enumerate(files)])
+                embed = self._create_embed(
+                    ctx, "📄 Available Save Files", files_list, discord.Color.blue()
+                )
+                await ctx.send(embed=embed)
+            else:
+                embed = self._create_embed(
+                    ctx,
+                    "ℹ️ No Files Found",
+                    "No saved to-do list files found.",
+                    discord.Color.blue(),
+                )
+                await ctx.send(embed=embed)
+        except Exception as e:
+            logger.error(f"Error listing files: {e}", exc_info=True)
+            embed = self._create_embed(
+                ctx,
+                "❌ Error Listing Files",
+                f"An error occurred while listing saved files: {e}",
+                discord.Color.red(),
+            )
+            await ctx.send(embed=embed)
 
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments.
-    
+
     Returns:
         The parsed arguments
     """
@@ -724,23 +944,23 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Enable debug mode with verbose logging",
     )
-    
+
     return parser.parse_args()
 
 
 def get_token(args: argparse.Namespace) -> Optional[str]:
     """Get the Discord token from args or environment.
-    
+
     Args:
         args: The parsed command line arguments
-        
+
     Returns:
         The Discord token or None if not found
     """
     # First try from args
     if args.token:
         return args.token
-        
+
     # Then try from environment
     token = os.getenv("DISCORD_TOKEN")
     return token
@@ -750,33 +970,37 @@ async def main() -> None:
     """Main entry point for the application."""
     # Parse arguments
     args = parse_args()
-    
+
     # Configure logging level
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("Debug mode enabled")
-    
+
     # Get token
     token = get_token(args)
     if not token:
-        logger.error("No Discord token provided. Use --token or set DISCORD_TOKEN environment variable.")
+        logger.error(
+            "No Discord token provided. Use --token or set DISCORD_TOKEN environment variable."
+        )
         sys.exit(1)
-    
+
     # Ensure data directory exists
     data_dir = Path(args.data_dir)
-    
+
     # Generate session ID
     session_id = str(uuid.uuid4())
     logger.info(f"Starting new session: {session_id}")
-    
+
     # Initialize bot with intents
     intents = discord.Intents.default()
     intents.message_content = True
-    bot = commands.Bot(command_prefix="!", intents=intents, help_command=CustomHelpCommand())
-    
+    bot = commands.Bot(
+        command_prefix="!", intents=intents, help_command=CustomHelpCommand()
+    )
+
     # Initialize storage
     storage = StorageManager(data_dir, session_id)
-    
+
     # Define on_ready event
     @bot.event
     async def on_ready() -> None:
@@ -785,20 +1009,20 @@ async def main() -> None:
             logger.info(f"Logged in as {bot.user.name}")
             logger.info(f"Bot ID: {bot.user.id}")
             logger.info(f"Session ID: {session_id}")
-            
+
             # Add cogs
             await bot.add_cog(TodoList(bot, storage))
             await bot.add_cog(BotManagement(bot, storage))
-            
+
             logger.info("Cogs loaded successfully")
         else:
             logger.error("Failed to log in - bot.user is None")
-    
+
     # Message logging (optional)
     @bot.listen("on_message")
     async def on_message(message: discord.Message) -> None:
         """Log messages received by the bot.
-        
+
         Args:
             message: The Discord message
         """
@@ -806,7 +1030,7 @@ async def main() -> None:
             logger.debug(
                 f"Message from {message.author} in {message.channel}: {message.content}"
             )
-    
+
     # Run the bot
     try:
         logger.info("Starting bot...")
@@ -818,4 +1042,5 @@ async def main() -> None:
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())
