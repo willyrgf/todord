@@ -257,8 +257,136 @@ class StorageManager:
         return files
 
 
+class CustomHelpCommand(commands.HelpCommand):
+    """Custom help command implementation for better readability."""
+    
+    def __init__(self):
+        super().__init__(
+            command_attrs={
+                "help": "Shows the bot's commands and their descriptions",
+                "cooldown": commands.CooldownMapping.from_cooldown(1, 3.0, commands.BucketType.member)
+            }
+        )
+    
+    async def send_bot_help(self, mapping):
+        """Send the bot help page."""
+        embed = discord.Embed(
+            title="Todord - To-Do List Commands",
+            description="Here are all the available commands:",
+            color=discord.Color.blue()
+        )
+        
+        for cog, commands in mapping.items():
+            # Filter commands that can be run
+            filtered = await self.filter_commands(commands, sort=True)
+            if filtered:
+                # Get cog name (or "Other Commands" if no cog)
+                name = getattr(cog, "qualified_name", "Other Commands")
+                
+                # Add cog description if available
+                cog_description = ""
+                if cog and cog.description:
+                    cog_description = f"*{cog.description}*\n"
+                
+                # Create command list for this category
+                command_list = []
+                for command in filtered:
+                    name_with_aliases = f"`!{command.name}`"
+                    if command.aliases:
+                        aliases = ", ".join(f"`!{alias}`" for alias in command.aliases)
+                        name_with_aliases = f"{name_with_aliases} (aliases: {aliases})"
+                    command_list.append(f"**{name_with_aliases}**\n{command.short_doc}")
+                
+                # Add field to embed
+                if command_list:
+                    embed.add_field(
+                        name=f"📋 {name}",
+                        value=f"{cog_description}{'⎯' * 20}\n" + "\n\n".join(command_list),
+                        inline=False
+                    )
+        
+        # Add usage information
+        embed.set_footer(text="Type !help <command> for detailed info on a command.")
+        
+        # Send the embed
+        await self.get_destination().send(embed=embed)
+    
+    async def send_command_help(self, command):
+        """Send help for a specific command."""
+        embed = discord.Embed(
+            title=f"Command: !{command.name}",
+            color=discord.Color.green()
+        )
+        
+        # Add aliases if any
+        if command.aliases:
+            aliases = ", ".join(f"`!{alias}`" for alias in command.aliases)
+            embed.add_field(
+                name="Aliases",
+                value=aliases,
+                inline=False
+            )
+        
+        # Add description
+        if command.help:
+            embed.add_field(
+                name="Description",
+                value=command.help,
+                inline=False
+            )
+        
+        # Add usage
+        usage = f"`!{command.name}"
+        if command.signature:
+            usage += f" {command.signature}"
+        usage += "`"
+        
+        embed.add_field(
+            name="Usage",
+            value=usage,
+            inline=False
+        )
+        
+        await self.get_destination().send(embed=embed)
+    
+    async def send_cog_help(self, cog):
+        """Send help for a specific category/cog."""
+        embed = discord.Embed(
+            title=f"Category: {cog.qualified_name}",
+            description=cog.description or "No description provided.",
+            color=discord.Color.gold()
+        )
+        
+        # Get commands in this cog
+        filtered = await self.filter_commands(cog.get_commands(), sort=True)
+        
+        # Add commands to embed
+        for command in filtered:
+            name_with_aliases = f"`!{command.name}`"
+            if command.aliases:
+                aliases = ", ".join(f"`!{alias}`" for alias in command.aliases)
+                name_with_aliases = f"{name_with_aliases} (aliases: {aliases})"
+            
+            embed.add_field(
+                name=name_with_aliases,
+                value=command.short_doc or "No description provided.",
+                inline=False
+            )
+        
+        await self.get_destination().send(embed=embed)
+
+    async def send_error_message(self, error):
+        """Send an error message."""
+        embed = discord.Embed(
+            title="Error",
+            description=error,
+            color=discord.Color.red()
+        )
+        await self.get_destination().send(embed=embed)
+
+
 class TodoList(commands.Cog):
-    """Commands for managing your to-do list."""
+    """Task management commands for creating and tracking your to-do items in this channel."""
 
     def __init__(self, bot: commands.Bot, storage: StorageManager) -> None:
         """Initialize the TodoList cog.
@@ -272,7 +400,8 @@ class TodoList(commands.Cog):
 
     @commands.command(
         name="add", 
-        help="Add a task to the channel's to-do list. Usage: !add <task>"
+        aliases=["a"],
+        help="Create a new task and add it to the channel's to-do list."
     )
     async def add_task(self, ctx: commands.Context, *, task: str) -> None:
         """Add a task to the channel's to-do list.
@@ -296,7 +425,8 @@ class TodoList(commands.Cog):
 
     @commands.command(
         name="list", 
-        help="List all tasks in the channel's to-do list. Usage: !list"
+        aliases=["ls", "l"],
+        help="Display all current tasks in this channel with their status."
     )
     async def list_tasks(self, ctx: commands.Context) -> None:
         """List all tasks in the channel's to-do list.
@@ -319,7 +449,8 @@ class TodoList(commands.Cog):
 
     @commands.command(
         name="done", 
-        help="Mark a task as done. Usage: !done <task number>"
+        aliases=["d"],
+        help="Mark a task as completed and remove it from the active list."
     )
     async def done_task(self, ctx: commands.Context, task_number: int) -> None:
         """Mark a task as done.
@@ -345,7 +476,8 @@ class TodoList(commands.Cog):
 
     @commands.command(
         name="close", 
-        help="Close a task. Usage: !close <task number>"
+        aliases=["c"],
+        help="Close a task without completing it and remove it from the active list."
     )
     async def close_task(self, ctx: commands.Context, task_number: int) -> None:
         """Close a task.
@@ -371,7 +503,8 @@ class TodoList(commands.Cog):
 
     @commands.command(
         name="log", 
-        help="Add a log to a task. Usage: !log <task number> <log>"
+        aliases=["lg"],
+        help="Add a progress note or comment to an existing task."
     )
     async def log_task(self, ctx: commands.Context, task_number: int, *, log: str) -> None:
         """Add a log to a task.
@@ -398,7 +531,8 @@ class TodoList(commands.Cog):
 
     @commands.command(
         name="details", 
-        help="Show details of a task. Usage: !details <task number>"
+        aliases=["det", "info"],
+        help="Show complete information about a task including its history and logs."
     )
     async def details_task(self, ctx: commands.Context, task_number: int) -> None:
         """Show details of a task.
@@ -425,7 +559,8 @@ class TodoList(commands.Cog):
 
     @commands.command(
         name="edit", 
-        help="Edit a task's title. Usage: !edit <task number> <new title>"
+        aliases=["e"],
+        help="Change the title/description of an existing task."
     )
     async def edit_task(self, ctx: commands.Context, task_number: int, *, new_title: str) -> None:
         """Edit a task's title.
@@ -451,9 +586,24 @@ class TodoList(commands.Cog):
         else:
             await ctx.reply("Invalid task number. Please check the list using !list.")
 
+
+class BotManagement(commands.Cog):
+    """Administrative commands for saving, loading, and managing your to-do lists."""
+
+    def __init__(self, bot: commands.Bot, storage: StorageManager) -> None:
+        """Initialize the BotManagement cog.
+        
+        Args:
+            bot: The Discord bot
+            storage: The storage manager
+        """
+        self.bot = bot
+        self.storage = storage
+
     @commands.command(
         name="clear", 
-        help="Clear the channel's to-do list. Usage: !clear"
+        aliases=["clr"],
+        help="Remove all tasks from the current channel's to-do list."
     )
     async def clear_tasks(self, ctx: commands.Context) -> None:
         """Clear the channel's to-do list.
@@ -470,23 +620,10 @@ class TodoList(commands.Cog):
         else:
             await ctx.reply("There are no tasks in this channel's to-do list.")
 
-
-class BotManagement(commands.Cog):
-    """Maintenance commands for the to-do list system."""
-
-    def __init__(self, bot: commands.Bot, storage: StorageManager) -> None:
-        """Initialize the BotManagement cog.
-        
-        Args:
-            bot: The Discord bot
-            storage: The storage manager
-        """
-        self.bot = bot
-        self.storage = storage
-
     @commands.command(
         name="save", 
-        help="Manually save your to-do lists. Usage: !save"
+        aliases=["s"],
+        help="Manually save the current state of all to-do lists to a file."
     )
     async def save_command(self, ctx: commands.Context) -> None:
         """Save the current to-do lists.
@@ -499,7 +636,8 @@ class BotManagement(commands.Cog):
 
     @commands.command(
         name="load", 
-        help="Load to-do lists from a JSON file. Usage: !load <filename>"
+        aliases=["ld"],
+        help="Load to-do lists from a previously saved file."
     )
     async def load_command(self, ctx: commands.Context, filename: str) -> None:
         """Load to-do lists from a file.
@@ -519,7 +657,8 @@ class BotManagement(commands.Cog):
 
     @commands.command(
         name="loadlast",
-        help="Load the most recent to-do list file. Usage: !loadlast"
+        aliases=["ll"],
+        help="Load the most recently saved to-do list file."
     )
     async def loadlast_command(self, ctx: commands.Context) -> None:
         """Load the most recent to-do list file.
@@ -547,7 +686,8 @@ class BotManagement(commands.Cog):
 
     @commands.command(
         name="list_files", 
-        help="List all saved to-do list files. Usage: !list_files"
+        aliases=["lf"],
+        help="Show all available saved to-do list files that can be loaded."
     )
     async def list_files_command(self, ctx: commands.Context) -> None:
         """List all saved to-do list files.
@@ -632,7 +772,7 @@ async def main() -> None:
     # Initialize bot with intents
     intents = discord.Intents.default()
     intents.message_content = True
-    bot = commands.Bot(command_prefix="!", intents=intents)
+    bot = commands.Bot(command_prefix="!", intents=intents, help_command=CustomHelpCommand())
     
     # Initialize storage
     storage = StorageManager(data_dir, session_id)
