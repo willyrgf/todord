@@ -1,177 +1,275 @@
-from datetime import datetime
-import json
-import discord
-import os
-import uuid
+#!/usr/bin/env python3
+"""Todord - A Discord To-Do List Bot.
+
+This script implements a Discord bot that helps manage to-do lists in Discord channels.
+"""
+
 import argparse
+import json
+import logging
+import os
+import sys
+import uuid
+from datetime import datetime
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union, Any, TypeVar, cast
+
+import discord
 from discord.ext import commands
 
-# Parse command line arguments
-parser = argparse.ArgumentParser(description="Todord - A Discord To-Do List Bot")
-parser.add_argument(
-    "--data_dir",
-    default="./data",
-    help="Directory to store data files (default: ./data)",
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()],
 )
-args = parser.parse_args()
-
-# Ensure data directory exists
-data_dir = Path(args.data_dir)
-if not data_dir.exists():
-    data_dir.mkdir(parents=True)
-    print(f"Created data directory: {data_dir}")
-
-TOKEN = os.getenv("DISCORD_TOKEN")
-if not TOKEN:
-    print("No DISCORD_TOKEN env configured.")
-    exit(1)
-
-# set up the bot with a command prefix.
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
-
-# In-memory dictionary to store to-do lists for each channel.
-todo_lists = {}  # channel->task
-
-# Global session ID for this bot run
-SessionID = str(uuid.uuid4())
+logger = logging.getLogger("todord")
 
 
-# async func to save the todo_lists as an json file based on session_id and datetime
-async def save_todo_lists(session_id: str):
-    current_time = datetime.now()
-    filename = (
-        f"todo_lists_{session_id}_{current_time.strftime('%Y-%m-%d_%H-%M-%S')}.json"
-    )
-    filepath = data_dir / filename
-    with open(filepath, "w") as f:
-        json.dump(todo_lists, f, default=lambda o: o.__dict__, indent=2)
-    return filename
-
-
-# Helper function to save after changes
-async def save_changes(ctx):
-    filename = await save_todo_lists(SessionID)
-    return filename
-
-
-# Load todo lists from a JSON file
-async def load_todo_lists_from_file(ctx, filename):
-    global todo_lists
-    try:
-        filepath = data_dir / filename
-        with open(filepath, "r") as f:
-            data = json.load(f)
-
-        # Convert raw data back to Task objects
-        reconstructed_todo_lists = {}
-        for channel_id, tasks in data.items():
-            channel_id = int(channel_id)  # JSON keys are strings, convert back to int
-            reconstructed_todo_lists[channel_id] = []
-
-            for task_data in tasks:
-                # Create a Task object with the data
-                task = Task(
-                    ctx,
-                    task_data["id"],
-                    task_data["title"],
-                    task_data["status"],
-                    task_data["logs"],
-                    task_data.get("creator", "Unknown")
-                )
-
-                # Restore internal logs if they exist
-                if "internal_logs" in task_data:
-                    task.internal_logs = task_data["internal_logs"]
-
-                reconstructed_todo_lists[channel_id].append(task)
-
-        todo_lists = reconstructed_todo_lists
-        return True
-    except Exception as e:
-        print(f"Error loading todo lists: {e}")
-        return False
-
-
-## ---
-## Task
-TaskCreated = "task_created"
-TaskStatusUpdated = "task_status_updated"
-TaskLogAdded = "task_log_added"
+class TaskEvent:
+    """Constants for task events."""
+    CREATED = "task_created"
+    STATUS_UPDATED = "task_status_updated"
+    LOG_ADDED = "task_log_added"
+    TITLE_EDITED = "task_title_edited"
 
 
 class Task:
-    id: int
-    title: str
-    status: str
-    logs: list[str]
-    internal_logs: list[tuple[str, str, str]]  # (timestamp, user, log)
-    creator: str
+    """Represents a task in a to-do list."""
 
     def __init__(
-        self, ctx: commands.Context, id: int, title: str, status: str, logs: list[str], creator: str = None
-    ):
-        self.id = id
-        self.title = title
-        self.status = status
-        self.logs = logs
-        self.internal_logs = []
-        self.creator = creator or ctx.author.name
-        self.add_internal_log(ctx, TaskCreated)
+        self, 
+        ctx: commands.Context, 
+        id: int, 
+        title: str, 
+        status: str, 
+        logs: Optional[List[str]] = None,
+        creator: Optional[str] = None
+    ) -> None:
+        """Initialize a new task.
+        
+        Args:
+            ctx: The command context
+            id: The task ID
+            title: The task title
+            status: The task status
+            logs: Optional list of logs
+            creator: Optional creator name (defaults to ctx.author.name)
+        """
+        self.id: int = id
+        self.title: str = title
+        self.status: str = status
+        self.logs: List[str] = logs or []
+        self.internal_logs: List[Tuple[str, str, str]] = []  # (timestamp, user, log)
+        self.creator: str = creator or ctx.author.name
+        self.add_internal_log(ctx, TaskEvent.CREATED)
 
-    def add_internal_log(self, ctx: commands.Context, log: str):
+    def add_internal_log(self, ctx: commands.Context, log: str) -> None:
+        """Add an internal log entry.
+        
+        Args:
+            ctx: The command context
+            log: The log message
+        """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         user = ctx.author.name
         self.internal_logs.append((timestamp, user, log))
 
-    def add_log(self, ctx: commands.Context, log: str):
+    def add_log(self, ctx: commands.Context, log: str) -> None:
+        """Add a user log entry.
+        
+        Args:
+            ctx: The command context
+            log: The log message
+        """
         self.logs.append(log)
-        self.add_internal_log(ctx, TaskLogAdded)
+        self.add_internal_log(ctx, TaskEvent.LOG_ADDED)
 
-    def set_status(self, ctx: commands.Context, status: str):
+    def set_status(self, ctx: commands.Context, status: str) -> None:
+        """Set the task status.
+        
+        Args:
+            ctx: The command context
+            status: The new status
+        """
         self.status = status
-        self.add_internal_log(ctx, TaskStatusUpdated)
+        self.add_internal_log(ctx, TaskEvent.STATUS_UPDATED)
+        
+    def set_title(self, ctx: commands.Context, title: str) -> None:
+        """Set the task title.
+        
+        Args:
+            ctx: The command context
+            title: The new title
+        """
+        self.title = title
+        self.add_internal_log(ctx, TaskEvent.TITLE_EDITED)
 
-    def show_details(self):
+    def show_details(self) -> str:
+        """Get a detailed representation of the task.
+        
+        Returns:
+            A formatted string with task details
+        """
         return f"[{self.status}] {self.title}\n{'\n'.join(self.logs)}"
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """Get a string representation of the task.
+        
+        Returns:
+            A formatted string with basic task info
+        """
         return f"[{self.status}] {self.title}"
 
 
-## ---
-## Cogs
+class StorageManager:
+    """Manages task persistence."""
+
+    def __init__(self, data_dir: Union[str, Path], session_id: str) -> None:
+        """Initialize the storage manager.
+        
+        Args:
+            data_dir: Directory to store data files
+            session_id: Current session ID
+        """
+        self.data_dir = Path(data_dir)
+        self.session_id = session_id
+        self.todo_lists: Dict[int, List[Task]] = {}  # channel_id -> [Task, Task, ...]
+
+        # Ensure data directory exists
+        if not self.data_dir.exists():
+            self.data_dir.mkdir(parents=True)
+            logger.info(f"Created data directory: {self.data_dir}")
+
+    async def save(self, ctx: commands.Context) -> str:
+        """Save the current state of todo lists.
+        
+        Args:
+            ctx: The command context
+            
+        Returns:
+            The filename of the saved file
+        """
+        current_time = datetime.now()
+        filename = f"todo_lists_{self.session_id}_{current_time.strftime('%Y-%m-%d_%H-%M-%S')}.json"
+        filepath = self.data_dir / filename
+        
+        with open(filepath, "w") as f:
+            json.dump(self.todo_lists, f, default=lambda o: o.__dict__, indent=2)
+        
+        return filename
+
+    async def load(self, ctx: commands.Context, filename: str) -> bool:
+        """Load todo lists from a file.
+        
+        Args:
+            ctx: The command context
+            filename: The file to load from
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            filepath = self.data_dir / filename
+            with open(filepath, "r") as f:
+                data = json.load(f)
+
+            # Convert raw data back to Task objects
+            reconstructed_todo_lists: Dict[int, List[Task]] = {}
+            
+            for channel_id, tasks in data.items():
+                channel_id_int = int(channel_id)  # JSON keys are strings, convert back to int
+                reconstructed_todo_lists[channel_id_int] = []
+
+                for task_data in tasks:
+                    # Create a Task object with the data
+                    task = Task(
+                        ctx,
+                        task_data["id"],
+                        task_data["title"],
+                        task_data["status"],
+                        task_data.get("logs", []),
+                        task_data.get("creator", "Unknown")
+                    )
+
+                    # Restore internal logs if they exist
+                    if "internal_logs" in task_data:
+                        task.internal_logs = task_data["internal_logs"]
+
+                    reconstructed_todo_lists[channel_id_int].append(task)
+
+            self.todo_lists = reconstructed_todo_lists
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error loading todo lists: {e}")
+            return False
+            
+    def list_saved_files(self) -> List[str]:
+        """List all saved todo list files.
+        
+        Returns:
+            A list of filenames
+        """
+        files = [
+            f for f in os.listdir(self.data_dir)
+            if f.startswith("todo_lists_") and f.endswith(".json")
+        ]
+        files.sort(key=lambda x: os.path.getctime(str(self.data_dir / x)))
+        return files
 
 
-class ToDoList(commands.Cog):
+class TodoList(commands.Cog):
     """Commands for managing your to-do list."""
 
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot, storage: StorageManager) -> None:
+        """Initialize the TodoList cog.
+        
+        Args:
+            bot: The Discord bot
+            storage: The storage manager
+        """
         self.bot = bot
+        self.storage = storage
 
     @commands.command(
-        name="add", help="Add a task to the channel's to-do list. Usage: !add <task>"
+        name="add", 
+        help="Add a task to the channel's to-do list. Usage: !add <task>"
     )
-    async def add_task(self, ctx, *, task: str):
+    async def add_task(self, ctx: commands.Context, *, task: str) -> None:
+        """Add a task to the channel's to-do list.
+        
+        Args:
+            ctx: The command context
+            task: The task description
+        """
         channel_id = ctx.channel.id
+        
         # Create a new list if channel does not have one
-        if channel_id not in todo_lists:
-            todo_lists[channel_id] = []
+        if channel_id not in self.storage.todo_lists:
+            self.storage.todo_lists[channel_id] = []
 
-        t = Task(ctx, len(todo_lists[channel_id]), task, "pending", [])
-        todo_lists[channel_id].append(t)
+        task_id = len(self.storage.todo_lists[channel_id])
+        new_task = Task(ctx, task_id, task, "pending", [])
+        self.storage.todo_lists[channel_id].append(new_task)
 
         await ctx.reply(f"Task added by {ctx.author.name}:\n**{task}**")
-        await save_changes(ctx)
+        await self.storage.save(ctx)
 
     @commands.command(
-        name="list", help="List all tasks in the channel's to-do list. Usage: !list"
+        name="list", 
+        help="List all tasks in the channel's to-do list. Usage: !list"
     )
-    async def list_tasks(self, ctx):
+    async def list_tasks(self, ctx: commands.Context) -> None:
+        """List all tasks in the channel's to-do list.
+        
+        Args:
+            ctx: The command context
+        """
         channel_id = ctx.channel.id
-        tasks = todo_lists.get(channel_id, [])
+        tasks = self.storage.todo_lists.get(channel_id, [])
+        
         if not tasks:
             await ctx.reply("There are no tasks in this channel's to-do list.")
             return
@@ -179,142 +277,337 @@ class ToDoList(commands.Cog):
         response = "**Channel To-Do List:**\n"
         for idx, task in enumerate(tasks, start=1):
             response += f"{idx}. {task}\n"
+            
         await ctx.reply(response)
 
     @commands.command(
-        name="done", help="Mark a task as done. Usage: !done <task number>"
+        name="done", 
+        help="Mark a task as done. Usage: !done <task number>"
     )
-    async def done_task(self, ctx, task_number: int):
+    async def done_task(self, ctx: commands.Context, task_number: int) -> None:
+        """Mark a task as done.
+        
+        Args:
+            ctx: The command context
+            task_number: The task number to mark as done
+        """
         channel_id = ctx.channel.id
-        tasks = todo_lists.get(channel_id, [])
+        tasks = self.storage.todo_lists.get(channel_id, [])
+        
+        if not tasks:
+            await ctx.reply("There are no tasks in this channel's to-do list.")
+            return
+            
         if 0 < task_number <= len(tasks):
             removed = tasks.pop(task_number - 1)
             removed.set_status(ctx, "done")
             await ctx.reply(f"Task marked as done by {ctx.author.name}:\n**{removed}**")
-            await save_changes(ctx)
+            await self.storage.save(ctx)
         else:
             await ctx.reply("Invalid task number. Please check the list using !list.")
 
-    @commands.command(name="close", help="Close a task. Usage: !close <task number>")
-    async def close_task(self, ctx, task_number: int):
+    @commands.command(
+        name="close", 
+        help="Close a task. Usage: !close <task number>"
+    )
+    async def close_task(self, ctx: commands.Context, task_number: int) -> None:
+        """Close a task.
+        
+        Args:
+            ctx: The command context
+            task_number: The task number to close
+        """
         channel_id = ctx.channel.id
-        tasks = todo_lists.get(channel_id, [])
+        tasks = self.storage.todo_lists.get(channel_id, [])
+        
+        if not tasks:
+            await ctx.reply("There are no tasks in this channel's to-do list.")
+            return
+            
         if 0 < task_number <= len(tasks):
             removed = tasks.pop(task_number - 1)
             removed.set_status(ctx, "closed")
             await ctx.reply(f"Task closed by {ctx.author.name}:\n**{removed}**")
-            await save_changes(ctx)
+            await self.storage.save(ctx)
         else:
             await ctx.reply("Invalid task number. Please check the list using !list.")
 
     @commands.command(
-        name="log", help="Add a log to a task. Usage: !log <task number> <log>"
+        name="log", 
+        help="Add a log to a task. Usage: !log <task number> <log>"
     )
-    async def log_task(self, ctx, task_number: int, *, log: str):
+    async def log_task(self, ctx: commands.Context, task_number: int, *, log: str) -> None:
+        """Add a log to a task.
+        
+        Args:
+            ctx: The command context
+            task_number: The task number to add a log to
+            log: The log message
+        """
         channel_id = ctx.channel.id
-        tasks = todo_lists.get(channel_id, [])
+        tasks = self.storage.todo_lists.get(channel_id, [])
+        
+        if not tasks:
+            await ctx.reply("There are no tasks in this channel's to-do list.")
+            return
+            
         if 0 < task_number <= len(tasks):
-            t = tasks[task_number - 1]
-            t.add_log(ctx, log)
-            await ctx.reply(f"Log added to task by {ctx.author.name}:\n{t.show_details()}")
-            await save_changes(ctx)
+            task = tasks[task_number - 1]
+            task.add_log(ctx, log)
+            await ctx.reply(f"Log added to task by {ctx.author.name}:\n{task.show_details()}")
+            await self.storage.save(ctx)
         else:
             await ctx.reply("Invalid task number. Please check the list using !list.")
 
     @commands.command(
-        name="details", help="Show details of a task. Usage: !details <task number>"
+        name="details", 
+        help="Show details of a task. Usage: !details <task number>"
     )
-    async def details_task(self, ctx, task_number: int):
+    async def details_task(self, ctx: commands.Context, task_number: int) -> None:
+        """Show details of a task.
+        
+        Args:
+            ctx: The command context
+            task_number: The task number to show details for
+        """
         channel_id = ctx.channel.id
-        tasks = todo_lists.get(channel_id, [])
+        tasks = self.storage.todo_lists.get(channel_id, [])
+        
+        if not tasks:
+            await ctx.reply("There are no tasks in this channel's to-do list.")
+            return
+            
         if 0 < task_number <= len(tasks):
-            t = tasks[task_number - 1]
-            await ctx.reply(f"Details of task:\n{t.show_details()}")
+            task = tasks[task_number - 1]
+            await ctx.reply(f"Details of task:\n{task.show_details()}")
         else:
             await ctx.reply("Invalid task number. Please check the list using !list.")
 
     @commands.command(
-        name="edit", help="Edit a task's title. Usage: !edit <task number> <new title>"
+        name="edit", 
+        help="Edit a task's title. Usage: !edit <task number> <new title>"
     )
-    async def edit_task(self, ctx, task_number: int, *, new_title: str):
+    async def edit_task(self, ctx: commands.Context, task_number: int, *, new_title: str) -> None:
+        """Edit a task's title.
+        
+        Args:
+            ctx: The command context
+            task_number: The task number to edit
+            new_title: The new task title
+        """
         channel_id = ctx.channel.id
-        tasks = todo_lists.get(channel_id, [])
+        tasks = self.storage.todo_lists.get(channel_id, [])
+        
+        if not tasks:
+            await ctx.reply("There are no tasks in this channel's to-do list.")
+            return
+            
         if 0 < task_number <= len(tasks):
             task = tasks[task_number - 1]
             old_title = task.title
-            task.title = new_title
-            task.add_internal_log(ctx, "task_title_edited")
+            task.set_title(ctx, new_title)
             await ctx.reply(f"Task title edited by {ctx.author.name}:\nFrom: **{old_title}**\nTo: **{new_title}**")
-            await save_changes(ctx)
+            await self.storage.save(ctx)
         else:
             await ctx.reply("Invalid task number. Please check the list using !list.")
 
+    @commands.command(
+        name="clear", 
+        help="Clear the channel's to-do list. Usage: !clear"
+    )
+    async def clear_tasks(self, ctx: commands.Context) -> None:
+        """Clear the channel's to-do list.
+        
+        Args:
+            ctx: The command context
+        """
+        channel_id = ctx.channel.id
+        
+        if channel_id in self.storage.todo_lists:
+            self.storage.todo_lists[channel_id] = []
+            await ctx.reply(f"The channel's to-do list has been cleared by {ctx.author.name}.")
+            await self.storage.save(ctx)
+        else:
+            await ctx.reply("There are no tasks in this channel's to-do list.")
 
-class Bot(commands.Cog):
+
+class BotManagement(commands.Cog):
     """Maintenance commands for the to-do list system."""
 
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot, storage: StorageManager) -> None:
+        """Initialize the BotManagement cog.
+        
+        Args:
+            bot: The Discord bot
+            storage: The storage manager
+        """
         self.bot = bot
+        self.storage = storage
 
-    @commands.command(name="save", help="Manually save your to-do lists. Usage: !save")
-    async def save_command(self, ctx):
-        filename = await save_changes(ctx)
+    @commands.command(
+        name="save", 
+        help="Manually save your to-do lists. Usage: !save"
+    )
+    async def save_command(self, ctx: commands.Context) -> None:
+        """Save the current to-do lists.
+        
+        Args:
+            ctx: The command context
+        """
+        filename = await self.storage.save(ctx)
         await ctx.reply(f"The to-do lists have been saved to '{filename}'.")
 
     @commands.command(
-        name="load", help="Load to-do lists from a JSON file. Usage: !load <filename>"
+        name="load", 
+        help="Load to-do lists from a JSON file. Usage: !load <filename>"
     )
-    async def load_command(self, ctx, filename: str):
-        success = await load_todo_lists_from_file(ctx, filename)
+    async def load_command(self, ctx: commands.Context, filename: str) -> None:
+        """Load to-do lists from a file.
+        
+        Args:
+            ctx: The command context
+            filename: The file to load from
+        """
+        success = await self.storage.load(ctx, filename)
         if success:
             await ctx.reply(f"Successfully loaded to-do lists from '{filename}'.")
         else:
             await ctx.reply(
-                f"Failed to load to-do lists from '{filename}'. Make sure the file exists and is in the correct format."
+                f"Failed to load to-do lists from '{filename}'. "
+                "Make sure the file exists and is in the correct format."
             )
 
     @commands.command(
-        name="list_files", help="List all saved to-do list files. Usage: !list_files"
+        name="list_files", 
+        help="List all saved to-do list files. Usage: !list_files"
     )
-    async def list_files_command(self, ctx):
-        files = [
-            f
-            for f in os.listdir(data_dir)
-            if f.startswith("todo_lists_") and f.endswith(".json")
-        ]
-        files.sort(key=lambda x: os.path.getctime(str(data_dir / x)))
+    async def list_files_command(self, ctx: commands.Context) -> None:
+        """List all saved to-do list files.
+        
+        Args:
+            ctx: The command context
+        """
+        files = self.storage.list_saved_files()
         if files:
             files_list = "\n".join(files)
             await ctx.reply(f"**Available to-do list files:**\n{files_list}")
         else:
             await ctx.reply("No saved to-do list files found.")
 
-    @commands.command(name="clear", help="Clear the channel's to-do list. Usage: !clear")
-    async def clear_tasks(self, ctx):
-        channel_id = ctx.channel.id
-        todo_lists[channel_id] = []
-        await ctx.reply(f"The channel's to-do list has been cleared by {ctx.author.name}.")
-        await save_changes(ctx)
 
-
-@bot.event
-async def on_ready():
-    if bot.user:
-        print(f"Logged in as {bot.user.name}")
-        print(f"SessionID: {SessionID}")
-    else:
-        print("Failed to log in")
-
-    # Load cogs
-    await bot.add_cog(ToDoList(bot))
-    await bot.add_cog(Bot(bot))
-
-
-@bot.listen("on_message")
-async def print_message(message):
-    print(
-        f"Received message from {message.author} in {message.channel}: {message.content}"
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments.
+    
+    Returns:
+        The parsed arguments
+    """
+    parser = argparse.ArgumentParser(description="Todord - A Discord To-Do List Bot")
+    parser.add_argument(
+        "--data_dir",
+        default="./data",
+        help="Directory to store data files (default: ./data)",
     )
+    parser.add_argument(
+        "--token",
+        help="Discord bot token (can also be set via DISCORD_TOKEN env variable)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode with verbose logging",
+    )
+    
+    return parser.parse_args()
 
 
-bot.run(TOKEN)
+def get_token(args: argparse.Namespace) -> Optional[str]:
+    """Get the Discord token from args or environment.
+    
+    Args:
+        args: The parsed command line arguments
+        
+    Returns:
+        The Discord token or None if not found
+    """
+    # First try from args
+    if args.token:
+        return args.token
+        
+    # Then try from environment
+    token = os.getenv("DISCORD_TOKEN")
+    return token
+
+
+async def main() -> None:
+    """Main entry point for the application."""
+    # Parse arguments
+    args = parse_args()
+    
+    # Configure logging level
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.debug("Debug mode enabled")
+    
+    # Get token
+    token = get_token(args)
+    if not token:
+        logger.error("No Discord token provided. Use --token or set DISCORD_TOKEN environment variable.")
+        sys.exit(1)
+    
+    # Ensure data directory exists
+    data_dir = Path(args.data_dir)
+    
+    # Generate session ID
+    session_id = str(uuid.uuid4())
+    logger.info(f"Starting new session: {session_id}")
+    
+    # Initialize bot with intents
+    intents = discord.Intents.default()
+    intents.message_content = True
+    bot = commands.Bot(command_prefix="!", intents=intents)
+    
+    # Initialize storage
+    storage = StorageManager(data_dir, session_id)
+    
+    # Define on_ready event
+    @bot.event
+    async def on_ready() -> None:
+        """Called when the bot is ready."""
+        if bot.user:
+            logger.info(f"Logged in as {bot.user.name}")
+            logger.info(f"Bot ID: {bot.user.id}")
+            logger.info(f"Session ID: {session_id}")
+            
+            # Add cogs
+            await bot.add_cog(TodoList(bot, storage))
+            await bot.add_cog(BotManagement(bot, storage))
+            
+            logger.info("Cogs loaded successfully")
+        else:
+            logger.error("Failed to log in - bot.user is None")
+    
+    # Message logging (optional)
+    @bot.listen("on_message")
+    async def on_message(message: discord.Message) -> None:
+        """Log messages received by the bot.
+        
+        Args:
+            message: The Discord message
+        """
+        if message.author != bot.user:  # Don't log the bot's own messages
+            logger.debug(
+                f"Message from {message.author} in {message.channel}: {message.content}"
+            )
+    
+    # Run the bot
+    try:
+        logger.info("Starting bot...")
+        await bot.start(token)
+    except Exception as e:
+        logger.exception(f"Error starting bot: {e}")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
