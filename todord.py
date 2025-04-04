@@ -518,6 +518,34 @@ class BotManagement(commands.Cog):
             )
 
     @commands.command(
+        name="loadlast",
+        help="Load the most recent to-do list file. Usage: !loadlast"
+    )
+    async def loadlast_command(self, ctx: commands.Context) -> None:
+        """Load the most recent to-do list file.
+        
+        Args:
+            ctx: The command context
+        """
+        files = self.storage.list_saved_files()
+        
+        if not files:
+            await ctx.reply("No saved to-do list files found.")
+            return
+            
+        # Files are already sorted by creation time, so the last one is the most recent
+        most_recent_file = files[-1]
+        
+        success = await self.storage.load(ctx, most_recent_file)
+        if success:
+            await ctx.reply(f"Successfully loaded the most recent to-do lists from '{most_recent_file}'.")
+        else:
+            await ctx.reply(
+                f"Failed to load to-do lists from '{most_recent_file}'. "
+                "The file may be corrupted or in an incorrect format."
+            )
+
+    @commands.command(
         name="list_files", 
         help="List all saved to-do list files. Usage: !list_files"
     )

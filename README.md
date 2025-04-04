@@ -48,5 +48,6 @@ python todord.py --token "your_discord_token" --data_dir "./my_data" --debug
 - `!clear` - Clear the channel's to-do list
 - `!save` - Manually save your to-do lists
 - `!load <filename>` - Load to-do lists from a JSON file
+- `!loadlast` - Load the most recent saved to-do list file
 - `!list_files` - List all saved to-do list files
 
