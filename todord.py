@@ -163,7 +163,7 @@ class ToDoList(commands.Cog):
         t = Task(ctx, len(todo_lists[channel_id]), task, "pending", [])
         todo_lists[channel_id].append(t)
 
-        await ctx.send(f"Task added by {ctx.author.name}:\n**{task}**")
+        await ctx.reply(f"Task added by {ctx.author.name}:\n**{task}**")
         await save_changes(ctx)
 
     @commands.command(
@@ -173,13 +173,13 @@ class ToDoList(commands.Cog):
         channel_id = ctx.channel.id
         tasks = todo_lists.get(channel_id, [])
         if not tasks:
-            await ctx.send("There are no tasks in this channel's to-do list.")
+            await ctx.reply("There are no tasks in this channel's to-do list.")
             return
 
         response = "**Channel To-Do List:**\n"
         for idx, task in enumerate(tasks, start=1):
             response += f"{idx}. {task}\n"
-        await ctx.send(response)
+        await ctx.reply(response)
 
     @commands.command(
         name="done", help="Mark a task as done. Usage: !done <task number>"
@@ -190,10 +190,10 @@ class ToDoList(commands.Cog):
         if 0 < task_number <= len(tasks):
             removed = tasks.pop(task_number - 1)
             removed.set_status(ctx, "done")
-            await ctx.send(f"Task marked as done by {ctx.author.name}:\n**{removed}**")
+            await ctx.reply(f"Task marked as done by {ctx.author.name}:\n**{removed}**")
             await save_changes(ctx)
         else:
-            await ctx.send("Invalid task number. Please check the list using !list.")
+            await ctx.reply("Invalid task number. Please check the list using !list.")
 
     @commands.command(name="close", help="Close a task. Usage: !close <task number>")
     async def close_task(self, ctx, task_number: int):
@@ -202,10 +202,10 @@ class ToDoList(commands.Cog):
         if 0 < task_number <= len(tasks):
             removed = tasks.pop(task_number - 1)
             removed.set_status(ctx, "closed")
-            await ctx.send(f"Task closed by {ctx.author.name}:\n**{removed}**")
+            await ctx.reply(f"Task closed by {ctx.author.name}:\n**{removed}**")
             await save_changes(ctx)
         else:
-            await ctx.send("Invalid task number. Please check the list using !list.")
+            await ctx.reply("Invalid task number. Please check the list using !list.")
 
     @commands.command(
         name="log", help="Add a log to a task. Usage: !log <task number> <log>"
@@ -216,10 +216,10 @@ class ToDoList(commands.Cog):
         if 0 < task_number <= len(tasks):
             t = tasks[task_number - 1]
             t.add_log(ctx, log)
-            await ctx.send(f"Log added to task by {ctx.author.name}:\n{t.show_details()}")
+            await ctx.reply(f"Log added to task by {ctx.author.name}:\n{t.show_details()}")
             await save_changes(ctx)
         else:
-            await ctx.send("Invalid task number. Please check the list using !list.")
+            await ctx.reply("Invalid task number. Please check the list using !list.")
 
     @commands.command(
         name="details", help="Show details of a task. Usage: !details <task number>"
@@ -229,9 +229,9 @@ class ToDoList(commands.Cog):
         tasks = todo_lists.get(channel_id, [])
         if 0 < task_number <= len(tasks):
             t = tasks[task_number - 1]
-            await ctx.send(f"Details of task:\n{t.show_details()}")
+            await ctx.reply(f"Details of task:\n{t.show_details()}")
         else:
-            await ctx.send("Invalid task number. Please check the list using !list.")
+            await ctx.reply("Invalid task number. Please check the list using !list.")
 
 
 class Bot(commands.Cog):
@@ -243,7 +243,7 @@ class Bot(commands.Cog):
     @commands.command(name="save", help="Manually save your to-do lists. Usage: !save")
     async def save_command(self, ctx):
         filename = await save_changes(ctx)
-        await ctx.send(f"The to-do lists have been saved to '{filename}'.")
+        await ctx.reply(f"The to-do lists have been saved to '{filename}'.")
 
     @commands.command(
         name="load", help="Load to-do lists from a JSON file. Usage: !load <filename>"
@@ -251,9 +251,9 @@ class Bot(commands.Cog):
     async def load_command(self, ctx, filename: str):
         success = await load_todo_lists_from_file(ctx, filename)
         if success:
-            await ctx.send(f"Successfully loaded to-do lists from '{filename}'.")
+            await ctx.reply(f"Successfully loaded to-do lists from '{filename}'.")
         else:
-            await ctx.send(
+            await ctx.reply(
                 f"Failed to load to-do lists from '{filename}'. Make sure the file exists and is in the correct format."
             )
 
@@ -269,15 +269,15 @@ class Bot(commands.Cog):
         files.sort(key=lambda x: os.path.getctime(str(data_dir / x)))
         if files:
             files_list = "\n".join(files)
-            await ctx.send(f"**Available to-do list files:**\n{files_list}")
+            await ctx.reply(f"**Available to-do list files:**\n{files_list}")
         else:
-            await ctx.send("No saved to-do list files found.")
+            await ctx.reply("No saved to-do list files found.")
 
     @commands.command(name="clear", help="Clear the channel's to-do list. Usage: !clear")
     async def clear_tasks(self, ctx):
         channel_id = ctx.channel.id
         todo_lists[channel_id] = []
-        await ctx.send(f"The channel's to-do list has been cleared by {ctx.author.name}.")
+        await ctx.reply(f"The channel's to-do list has been cleared by {ctx.author.name}.")
         await save_changes(ctx)
 
 
