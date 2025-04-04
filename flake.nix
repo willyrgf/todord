@@ -1,53 +1,43 @@
 {
   description = "Todord distributed by Nix.";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs";
-  inputs.flake-utils.url = "github:numtide/flake-utils";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
 
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        pythonBasics =  pkgs.python3.withPackages (ps: with ps; [
-          discordpy
-        ]);
-        pythonEnv = pkgs.python3.withPackages (ps: with ps; [
-          discordpy
-          ruff
-        ]);
-      in
-      {
+        pythonWithPkgs =
+          pkgs.python3.withPackages (ps: with ps; [ discordpy ruff ]);
+      in {
         packages = {
           todord = pkgs.stdenv.mkDerivation {
             pname = "todord";
             version = "0.0.1";
-            src = ./.;
+            src = self;
 
             nativeBuildInputs = [ pkgs.makeWrapper ];
-            buildInputs = [ pythonBasics pkgs.git ];
+            buildInputs = [ pythonWithPkgs pkgs.git ];
 
             dontBuild = true;
 
             installPhase = ''
-              echo "Contents of source directory:"
-              ls -la
               mkdir -p $out/bin $out/lib
-              if [ -f "todord.py" ]; then
-                cp todord.py $out/lib/
-                makeWrapper ${pythonBasics}/bin/python $out/bin/todord \
+              if [ -f "$src/todord.py" ]; then
+                cp $src/todord.py $out/lib/todord.py
+                makeWrapper ${pythonWithPkgs}/bin/python $out/bin/todord \
                   --add-flags "$out/lib/todord.py" \
                   --prefix PATH : ${pkgs.git}/bin
               else
-                echo "ERROR: todord.py not found, adding it..."
+                echo "ERROR: todord.py not found in source directory" >&2
                 exit 1
               fi
             '';
-
-            shellHook = ''
-              export PATH=${pythonBasics}/bin:${pkgs.git}/bin:$PATH
-            '';
           };
-          
+
           default = self.packages.${system}.todord;
         };
 
@@ -60,25 +50,20 @@
               mainProgram = "todord";
             };
           };
-          
+
           default = self.apps.${system}.todord;
         };
 
         devShells = {
           default = pkgs.mkShell {
             name = "todord-dev-env";
-            packages = [ pythonEnv pkgs.git ];
-            
-            # Don't automatically run the todord package to prevent auto-execution
-            # Instead make it available on PATH only
+            packages = [ pythonWithPkgs pkgs.git ];
+
             shellHook = ''
               export HISTFILE=$HOME/.history_nix
-              export PYTHONPATH=$PYTHONPATH:$(pwd)
-              
-              export PATH=${pythonEnv}/bin:${pkgs.git}/bin:$PATH
-              
-              alias todord="python $(pwd)/todord.py"
-              
+              export PYTHONPATH=${builtins.toString ./.}:$PYTHONPATH
+              export PATH=${pythonWithPkgs}/bin:${pkgs.git}/bin:$PATH
+              alias todord="python ${builtins.toString ./.}/todord.py"
               echo "Todord development environment activated"
               echo "Type 'todord' to run the application"
             '';
