@@ -65,16 +65,18 @@ class Task:
         self.creator: str = creator or ctx.author.name
         self.add_internal_log(ctx, TaskEvent.CREATED)
 
-    def add_internal_log(self, ctx: commands.Context, log: str) -> None:
+    def add_internal_log(self, ctx: commands.Context, log: str, extra_info: str = "") -> None:
         """Add an internal log entry.
         
         Args:
             ctx: The command context
             log: The log message
+            extra_info: Optional additional information about the action
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         user = ctx.author.name
-        self.internal_logs.append((timestamp, user, log))
+        action = log if not extra_info else f"{log}: {extra_info}"
+        self.internal_logs.append((timestamp, user, action))
 
     def add_log(self, ctx: commands.Context, log: str) -> None:
         """Add a user log entry.
@@ -84,7 +86,7 @@ class Task:
             log: The log message
         """
         self.logs.append(log)
-        self.add_internal_log(ctx, TaskEvent.LOG_ADDED)
+        self.add_internal_log(ctx, TaskEvent.LOG_ADDED, f"'{log[:30]}{'...' if len(log) > 30 else ''}'")
 
     def set_status(self, ctx: commands.Context, status: str) -> None:
         """Set the task status.
@@ -93,8 +95,9 @@ class Task:
             ctx: The command context
             status: The new status
         """
+        old_status = self.status
         self.status = status
-        self.add_internal_log(ctx, TaskEvent.STATUS_UPDATED)
+        self.add_internal_log(ctx, TaskEvent.STATUS_UPDATED, f"from '{old_status}' to '{status}'")
         
     def set_title(self, ctx: commands.Context, title: str) -> None:
         """Set the task title.
@@ -103,16 +106,50 @@ class Task:
             ctx: The command context
             title: The new title
         """
+        old_title = self.title
         self.title = title
-        self.add_internal_log(ctx, TaskEvent.TITLE_EDITED)
+        self.add_internal_log(ctx, TaskEvent.TITLE_EDITED, f"from '{old_title[:30]}{'...' if len(old_title) > 30 else ''}' to '{title[:30]}{'...' if len(title) > 30 else ''}'")
 
     def show_details(self) -> str:
         """Get a detailed representation of the task.
         
         Returns:
-            A formatted string with task details
+            A formatted string with task details including history
         """
-        return f"[{self.status}] {self.title}\n{'\n'.join(self.logs)}"
+        # Start with the basic task info
+        details = [f"[{self.status}] {self.title}"]
+        
+        # Add creator info
+        details.append(f"Created by: {self.creator}")
+        
+        # Add task logs if any
+        if self.logs:
+            details.append("\n**Logs:**")
+            for i, log in enumerate(self.logs, 1):
+                details.append(f"{i}. {log}")
+        
+        # Add history from internal logs
+        if self.internal_logs:
+            details.append("\n**History:**")
+            for timestamp, user, action in self.internal_logs:
+                # Extract the basic action type
+                action_type = action.split(":", 1)[0] if ":" in action else action
+                action_details = action.split(":", 1)[1].strip() if ":" in action else ""
+                
+                # Convert action code to readable text
+                readable_action = action_type
+                if action_type == TaskEvent.CREATED:
+                    readable_action = "Created task"
+                elif action_type == TaskEvent.STATUS_UPDATED:
+                    readable_action = f"Updated status {action_details}"
+                elif action_type == TaskEvent.LOG_ADDED:
+                    readable_action = f"Added log {action_details}"
+                elif action_type == TaskEvent.TITLE_EDITED:
+                    readable_action = f"Edited title {action_details}"
+                
+                details.append(f"• {timestamp} - {user}: {readable_action}")
+        
+        return "\n".join(details)
 
     def __str__(self) -> str:
         """Get a string representation of the task.
@@ -379,7 +416,10 @@ class TodoList(commands.Cog):
             
         if 0 < task_number <= len(tasks):
             task = tasks[task_number - 1]
-            await ctx.reply(f"Details of task:\n{task.show_details()}")
+            details = task.show_details()
+            
+            # Send the task details in a nicely formatted message
+            await ctx.reply(f"**Task #{task_number} Details:**\n{details}")
         else:
             await ctx.reply("Invalid task number. Please check the list using !list.")
 
