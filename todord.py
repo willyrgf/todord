@@ -189,6 +189,7 @@ class ToDoList(commands.Cog):
         tasks = todo_lists.get(channel_id, [])
         if 0 < task_number <= len(tasks):
             removed = tasks.pop(task_number - 1)
+            removed.set_status(ctx, "done")
             await ctx.send(f"Task marked as done by {ctx.author.name}:\n**{removed}**")
             await save_changes(ctx)
         else:
@@ -199,9 +200,9 @@ class ToDoList(commands.Cog):
         channel_id = ctx.channel.id
         tasks = todo_lists.get(channel_id, [])
         if 0 < task_number <= len(tasks):
-            t = tasks[task_number - 1]
-            t.set_status(ctx, "closed")
-            await ctx.send(f"Task closed by {ctx.author.name}:\n**{t}**")
+            removed = tasks.pop(task_number - 1)
+            removed.set_status(ctx, "closed")
+            await ctx.send(f"Task closed by {ctx.author.name}:\n**{removed}**")
             await save_changes(ctx)
         else:
             await ctx.send("Invalid task number. Please check the list using !list.")
