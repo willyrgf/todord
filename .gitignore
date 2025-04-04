@@ -1,5 +1,5 @@
 # .gitignore
-.env
+__pycache__
 result
-todo_list*.json
+.env
 data

@@ -11,6 +11,7 @@ on:
 env:
   BUILD_CMD: "nix build -L -v --log-format bar-with-logs"
   RUN_CMD: "nix run .#default -L -v --log-format bar-with-logs -- --help"
+  RUN_TESTS_CMD: "nix develop -L -v --log-format bar-with-logs -c python3 run_tests.py"
 
 jobs:
   build-and-test:
@@ -35,7 +36,12 @@ jobs:
           echo $BUILD_CMD
           eval $BUILD_CMD
 
-      - name: Test todord execution
+      - name: Run todord tests
+        run: |
+          echo $RUN_TESTS_CMD
+          eval $RUN_TESTS_CMD
+
+      - name: Run todord --help
         run: |
           echo $RUN_CMD
           # Build the flake and run the help command
@@ -52,3 +58,4 @@ jobs:
             echo "✗ Help text does not contain 'DATA_DIR'"
             exit 1
           fi
+
