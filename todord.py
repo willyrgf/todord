@@ -233,6 +233,22 @@ class ToDoList(commands.Cog):
         else:
             await ctx.reply("Invalid task number. Please check the list using !list.")
 
+    @commands.command(
+        name="edit", help="Edit a task's title. Usage: !edit <task number> <new title>"
+    )
+    async def edit_task(self, ctx, task_number: int, *, new_title: str):
+        channel_id = ctx.channel.id
+        tasks = todo_lists.get(channel_id, [])
+        if 0 < task_number <= len(tasks):
+            task = tasks[task_number - 1]
+            old_title = task.title
+            task.title = new_title
+            task.add_internal_log(ctx, "task_title_edited")
+            await ctx.reply(f"Task title edited by {ctx.author.name}:\nFrom: **{old_title}**\nTo: **{new_title}**")
+            await save_changes(ctx)
+        else:
+            await ctx.reply("Invalid task number. Please check the list using !list.")
+
 
 class Bot(commands.Cog):
     """Maintenance commands for the to-do list system."""
