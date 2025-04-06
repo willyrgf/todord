@@ -45,9 +45,11 @@
           todord = {
             type = "app";
             program = "${self.packages.${system}.todord}/bin/todord";
-            meta = {
-              description = "Todord application";
-              mainProgram = "todord";
+            meta = with pkgs.lib; {
+              description = "A To Do List Discord Bot";
+              homepage = "https://github.com/willyrgf/todord";
+              license = licenses.mit;
+              platforms = platforms.all;
             };
           };
 

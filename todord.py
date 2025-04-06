@@ -913,10 +913,10 @@ class BotManagement(commands.Cog):
 
 class ConnectionMonitor:
     """Monitors connection health and failures."""
-    
+
     def __init__(self, max_retries: int = 3) -> None:
         """Initialize connection monitor.
-        
+
         Args:
             max_retries: Maximum number of consecutive failures before exit
         """
@@ -926,54 +926,64 @@ class ConnectionMonitor:
         self.failure_types = {}
         self.last_failure_time = None
         self.first_failure_time = None
-        
+
     def connection_successful(self) -> None:
         """Reset the failure counter on successful connection."""
         if self.consecutive_failures > 0:
-            logger.info(f"Connection restored after {self.consecutive_failures} consecutive failures")
+            logger.info(
+                f"Connection restored after {self.consecutive_failures} consecutive failures"
+            )
         self.consecutive_failures = 0
-        
+
     def connection_failed(self, error_type: str) -> bool:
         """Increment failure counter and check if max retries reached.
-        
+
         Args:
             error_type: Type of connection error that occurred
-            
+
         Returns:
             True if max retries reached, False otherwise
         """
         now = datetime.now()
         if self.consecutive_failures == 0:
             self.first_failure_time = now
-            
+
         self.consecutive_failures += 1
         self.total_failures += 1
         self.last_failure_time = now
-        
+
         # Track types of failures
         if error_type in self.failure_types:
             self.failure_types[error_type] += 1
         else:
             self.failure_types[error_type] = 1
-            
+
         # Log detailed failure info
         elapsed = None
         if self.first_failure_time:
             elapsed_seconds = (now - self.first_failure_time).total_seconds()
             elapsed = f"{elapsed_seconds:.1f} seconds"
-            
+
         logger.warning(
             f"Connection failure #{self.consecutive_failures}: {error_type}. "
-            f"Total failures: {self.total_failures}" + 
-            (f" in {elapsed}" if elapsed else "")
+            f"Total failures: {self.total_failures}"
+            + (f" in {elapsed}" if elapsed else "")
         )
-        
+
         # Critical errors that should cause immediate exit
-        critical_errors = ["ConnectionClosed", "GatewayNotFound", "LoginFailure", "Disconnection", "ClientConnectorDNSError"]
+        critical_errors = [
+            "ConnectionClosed",
+            "GatewayNotFound",
+            "LoginFailure",
+            "Disconnection",
+            "ClientConnectorDNSError",
+        ]
         if error_type in critical_errors and self.consecutive_failures >= 2:
-            logger.critical(f"Critical connection error: {error_type}. Exiting immediately.")
+            logger.critical(
+                f"Critical connection error: {error_type}. Exiting immediately."
+            )
             return True
-            
+
         # Check if max retries reached
         if self.consecutive_failures >= self.max_retries:
             logger.critical(
@@ -981,43 +991,51 @@ class ConnectionMonitor:
                 f"Failure types: {self.failure_types}"
             )
             return True
-            
+
         return False
-        
+
     def get_status_report(self) -> str:
         """Get a detailed status report of connection health.
-        
+
         Returns:
             A string with connection status information
         """
         if self.total_failures == 0:
             return "No connection failures detected"
-            
+
         status = [
             f"Connection Status Report:",
             f"- Total failures: {self.total_failures}",
             f"- Consecutive failures: {self.consecutive_failures}",
         ]
-        
+
         if self.first_failure_time:
-            status.append(f"- First failure: {self.first_failure_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        
+            status.append(
+                f"- First failure: {self.first_failure_time.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+
         if self.last_failure_time:
-            status.append(f"- Latest failure: {self.last_failure_time.strftime('%Y-%m-%d %H:%M:%S')}")
-            
+            status.append(
+                f"- Latest failure: {self.last_failure_time.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+
         if self.first_failure_time and self.last_failure_time:
-            elapsed_seconds = (self.last_failure_time - self.first_failure_time).total_seconds()
+            elapsed_seconds = (
+                self.last_failure_time - self.first_failure_time
+            ).total_seconds()
             status.append(f"- Problem duration: {elapsed_seconds:.1f} seconds")
-        
+
         status.append("- Failure types:")
-        
+
         if not self.failure_types:
             status.append("  - None recorded")
         else:
-            for error_type, count in sorted(self.failure_types.items(), key=lambda x: x[1], reverse=True):
+            for error_type, count in sorted(
+                self.failure_types.items(), key=lambda x: x[1], reverse=True
+            ):
                 percentage = (count / self.total_failures) * 100
                 status.append(f"  - {error_type}: {count} ({percentage:.1f}%)")
-            
+
         return "\n".join(status)
 
 
@@ -1101,7 +1119,7 @@ async def main() -> None:
     bot = commands.Bot(
         command_prefix="!", intents=intents, help_command=CustomHelpCommand()
     )
-    
+
     # Initialize connection monitor
     connection_monitor = ConnectionMonitor(max_retries=args.max_retries)
     logger.info(f"Connection monitor initialized with max_retries={args.max_retries}")
@@ -1109,13 +1127,60 @@ async def main() -> None:
     # Initialize storage
     storage = StorageManager(data_dir, session_id)
 
+    # Helper function to send announcements to all channels
+    async def send_announcement_to_all_channels(
+        title: str,
+        description: str,
+        color: discord.Color,
+        skip_channel_id: Optional[int] = None,
+    ) -> None:
+        """Send an announcement to all text channels.
+
+        Args:
+            title: The title of the embed
+            description: The description of the embed
+            color: The color of the embed
+            skip_channel_id: Optional channel ID to skip (if already announced there)
+        """
+        for guild in bot.guilds:
+            for channel in guild.text_channels:
+                if skip_channel_id and channel.id == skip_channel_id:
+                    continue
+                try:
+                    embed = discord.Embed(
+                        title=title, description=description, color=color
+                    )
+                    await channel.send(embed=embed)
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to send announcement to {channel.name} in {guild.name}: {e}"
+                    )
+
+    # Helper function to find first available channel
+    async def find_first_available_channel():
+        """Find the first available text channel for sending messages.
+
+        Returns:
+            The first available text channel or None
+        """
+        for guild in bot.guilds:
+            for channel in guild.text_channels:
+                try:
+                    # Try sending a test message
+                    test_msg = await channel.send("Testing channel availability...")
+                    await test_msg.delete()  # Clean up test message
+                    return channel
+                except Exception:
+                    continue
+        return None
+
     # Define on_ready event
     @bot.event
     async def on_ready() -> None:
         """Called when the bot is ready."""
         # Reset connection failures on successful connection
         connection_monitor.connection_successful()
-        
+
         if bot.user:
             logger.info(f"Logged in as {bot.user.name}")
             logger.info(f"Bot ID: {bot.user.id}")
@@ -1126,24 +1191,66 @@ async def main() -> None:
             await bot.add_cog(BotManagement(bot, storage))
 
             logger.info("Cogs loaded successfully")
+
+            # Announce bot is online in all text channels
+            await send_announcement_to_all_channels(
+                "🟢 Todord Bot Online",
+                "Online and ready to help!",
+                discord.Color.green(),
+            )
+
+            # Auto-execute loadlast command if there are saved files
+            bot_management_cog = bot.get_cog("BotManagement")
+            if bot_management_cog:
+                files = storage.list_saved_files()
+                if files:
+                    # Find a channel where we can run the command
+                    channel = await find_first_available_channel()
+                    if channel:
+                        try:
+                            # Send loading message and create context for command
+                            loading_msg = await channel.send(
+                                "Auto-loading last saved state..."
+                            )
+                            ctx = await bot.get_context(loading_msg)
+
+                            # Execute loadlast command
+                            await bot_management_cog.loadlast_command(ctx)
+
+                            # Announce successful loading to all channels
+                            most_recent_file = files[-1]
+                            await send_announcement_to_all_channels(
+                                "📂 State Auto-Loaded",
+                                f"Successfully loaded the most recent todo list from `{most_recent_file}`",
+                                discord.Color.green(),
+                                channel.id,  # Skip the channel we already announced in
+                            )
+                        except Exception as e:
+                            logger.error(f"Error during auto-load: {e}", exc_info=True)
+                    else:
+                        logger.warning("Could not find any channel to auto-load state")
+            else:
+                logger.error("BotManagement cog not found for auto-loading")
         else:
             logger.error("Failed to log in - bot.user is None")
-    
+
     @bot.event
     async def on_resume() -> None:
         """Called when the bot resumes a session after reconnecting."""
         connection_monitor.connection_successful()
         logger.info("Bot resumed connection to Discord")
-    
+
     @bot.event
     async def on_disconnect() -> None:
         """Called when the bot disconnects from Discord."""
         logger.warning("Bot disconnected from Discord")
-        
+
         # Track disconnects as connection failures
         error_type = "Disconnection"
         if connection_monitor.connection_failed(error_type):
-            logger.critical("Connection failure threshold reached after multiple disconnections. Exiting...")
+            logger.critical(
+                "Connection failure threshold reached after multiple disconnections. Exiting..."
+            )
             logger.critical(connection_monitor.get_status_report())
             sys.exit(1)
 
@@ -1152,30 +1259,38 @@ async def main() -> None:
         """Called when the bot connects to Discord."""
         connection_monitor.connection_successful()
         logger.info("Bot connected to Discord")
-    
-    @bot.event 
+
+    @bot.event
     async def on_error(event_method: str, *args, **kwargs) -> None:
         """Handle errors that occur in the bot.
-        
+
         Args:
             event_method: The event method where the error occurred
             *args: Arguments passed to the event method
             **kwargs: Keyword arguments passed to the event method
         """
         logger.error(f"Error in {event_method}: {sys.exc_info()[1]}")
-        
+
         # Check if this is a connection-related error
         exc_type, exc_value, _ = sys.exc_info()
-        
+
         # Check for client connector errors (network issues)
-        if isinstance(exc_value, (TimeoutError, discord_errors.ConnectionClosed, 
-                                  discord_errors.GatewayNotFound, asyncio.exceptions.CancelledError,
-                                  discord_errors.HTTPException, discord_errors.LoginFailure,
-                                  client_exceptions.ClientConnectorError,
-                                  client_exceptions.ClientConnectorDNSError)):
+        if isinstance(
+            exc_value,
+            (
+                TimeoutError,
+                discord_errors.ConnectionClosed,
+                discord_errors.GatewayNotFound,
+                asyncio.exceptions.CancelledError,
+                discord_errors.HTTPException,
+                discord_errors.LoginFailure,
+                client_exceptions.ClientConnectorError,
+                client_exceptions.ClientConnectorDNSError,
+            ),
+        ):
             error_type = exc_type.__name__
             logger.warning(f"Connection error detected: {error_type}: {exc_value}")
-            
+
             if connection_monitor.connection_failed(error_type):
                 logger.critical(f"Connection failure threshold reached. Exiting...")
                 logger.critical(connection_monitor.get_status_report())
@@ -1200,16 +1315,24 @@ async def main() -> None:
         await bot.start(token)
     except Exception as e:
         logger.exception(f"Error starting bot: {e}")
-        
+
         # Check if this is a connection-related error
-        if isinstance(e, (TimeoutError, discord_errors.ConnectionClosed, 
-                        discord_errors.GatewayNotFound, asyncio.exceptions.CancelledError,
-                        discord_errors.HTTPException, discord_errors.LoginFailure,
-                        client_exceptions.ClientConnectorError,
-                        client_exceptions.ClientConnectorDNSError)):
+        if isinstance(
+            e,
+            (
+                TimeoutError,
+                discord_errors.ConnectionClosed,
+                discord_errors.GatewayNotFound,
+                asyncio.exceptions.CancelledError,
+                discord_errors.HTTPException,
+                discord_errors.LoginFailure,
+                client_exceptions.ClientConnectorError,
+                client_exceptions.ClientConnectorDNSError,
+            ),
+        ):
             error_type = type(e).__name__
             logger.warning(f"Connection error detected: {error_type}: {e}")
-            
+
             if connection_monitor.connection_failed(error_type):
                 logger.critical(f"Connection failure threshold reached. Exiting...")
                 logger.critical(connection_monitor.get_status_report())
