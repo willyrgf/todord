@@ -161,7 +161,7 @@ class StorageManager:
 
     async def save(self, ctx: Optional[commands.Context] = None) -> str:
         current_time = datetime.now()
-        filename = f"todo_lists_{self.session_id}_{current_time.strftime('%Y-%m-%d_%H-%M-%S')}.json"
+        filename = f"{APP_NAME}_{self.session_id}_{current_time.strftime('%Y-%m-%d_%H-%M-%S')}.json"
         filepath = self.data_dir / filename
 
         with open(filepath, "w") as f:
@@ -209,7 +209,7 @@ class StorageManager:
         files = [
             f
             for f in os.listdir(self.data_dir)
-            if f.startswith("todo_lists_") and f.endswith(".json")
+            if f.startswith(f"{APP_NAME}_") and f.endswith(".json")
         ]
         files.sort(key=lambda x: os.path.getctime(str(self.data_dir / x)))
         return files
