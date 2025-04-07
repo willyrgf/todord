@@ -30,7 +30,7 @@ DISCORD_TOKEN="your_discord_token" nix run 'github:willyrgf/todord' -- --data_di
 ```sh
 # Required: Set your Discord token as an environment variable
 # Run the bot (data stored in ./data by default)
-export DISCORD_TOKEN="your_discord_token" python todord.py --data_dir ./my_task_data
+DISCORD_TOKEN="your_discord_token" python todord.py --data_dir ./my_task_data
 ```
 
 ### Running the Bot with Git Synchronization (`todord-syng`)

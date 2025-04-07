@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 import shutil
 
+import todord
+
 # Add the parent directory to sys.path to import the module
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -45,7 +47,7 @@ class TestStorageManager(unittest.IsolatedAsyncioTestCase):
         filename = await self.storage.save(self.mock_ctx)
 
         # Verify the expected filename
-        expected_filename = f"todo_lists_{self.session_id}_2023-01-01_12-00-00.json"
+        expected_filename = f"{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00.json"
         self.assertEqual(filename, expected_filename)
 
         # Verify the file exists
@@ -75,8 +77,8 @@ class TestStorageManager(unittest.IsolatedAsyncioTestCase):
     async def test_list_saved_files(self):
         # Create some test files
         test_files = [
-            f"todo_lists_{self.session_id}_2023-01-01_12-00-00.json",
-            f"todo_lists_{self.session_id}_2023-01-02_12-00-00.json",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00.json",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_12-00-00.json",
         ]
 
         for filename in test_files:
