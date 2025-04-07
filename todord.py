@@ -20,6 +20,10 @@ from discord.ext import commands
 from discord import errors as discord_errors
 from aiohttp import client_exceptions
 
+# Application information from environment variables
+APP_NAME = os.getenv("TODORD_APP_NAME", "todord")
+APP_VERSION = os.getenv("TODORD_APP_VERSION", "dev")
+
 # Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
@@ -901,7 +905,9 @@ async def find_first_available_channel(bot):
 # Command line argument parsing
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Todord - A Discord To-Do List Bot")
+    parser = argparse.ArgumentParser(
+        description=f"{APP_NAME} - A Discord To-Do List Bot"
+    )
     parser.add_argument(
         "--data_dir",
         default="./data",
@@ -919,6 +925,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=3,
         help="Maximum number of consecutive connection failures before exiting (default: 3)",
+    )
+    parser.add_argument(
+        "--version",
+        action="store_true",
+        help=f"Show {APP_NAME} version information and exit",
     )
 
     return parser.parse_args()
@@ -968,7 +979,7 @@ async def setup_bot(args, token, session_id, connection_monitor):
             # Announce bot is online in all text channels
             await send_announcement_to_all_channels(
                 bot,
-                "🟢 Todord Bot Online",
+                f"🟢 {APP_NAME} v{APP_VERSION}: Bot Online",
                 "Ready to help!",
                 discord.Color.green(),
             )
@@ -1080,6 +1091,11 @@ async def main() -> None:
     # Parse arguments
     args = parse_args()
 
+    # Check if version flag was set
+    if args.version:
+        print(f"{APP_NAME} v{APP_VERSION}")
+        sys.exit(0)
+
     # Configure logging level
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -1096,6 +1112,9 @@ async def main() -> None:
     # Generate session ID
     session_id = str(uuid.uuid4())
     logger.info("Starting new session: " + session_id)
+
+    # Log application details
+    logger.info(f"Starting {APP_NAME} v{APP_VERSION}")
 
     # Initialize connection monitor
     connection_monitor = ConnectionMonitor(max_retries=args.max_retries)

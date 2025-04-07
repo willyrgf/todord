@@ -12,11 +12,15 @@
         pkgs = import nixpkgs { inherit system; };
         pythonWithPkgs =
           pkgs.python3.withPackages (ps: with ps; [ discordpy ruff ]);
+        
+        # Define app name and version as variables
+        appName = "todord";
+        appVersion = "0.1.0";
       in {
         packages = {
           todord = pkgs.stdenv.mkDerivation {
-            pname = "todord";
-            version = "0.0.1";
+            pname = appName;
+            version = appVersion;
             src = self;
 
             nativeBuildInputs = [ pkgs.makeWrapper ];
@@ -30,7 +34,9 @@
                 cp $src/todord.py $out/lib/todord.py
                 makeWrapper ${pythonWithPkgs}/bin/python $out/bin/todord \
                   --add-flags "$out/lib/todord.py" \
-                  --prefix PATH : ${pkgs.git}/bin
+                  --prefix PATH : ${pkgs.git}/bin \
+                  --set TODORD_APP_NAME "${appName}" \
+                  --set TODORD_APP_VERSION "${appVersion}"
               else
                 echo "ERROR: todord.py not found in source directory" >&2
                 exit 1
@@ -65,6 +71,8 @@
               export HISTFILE=$HOME/.history_nix
               export PYTHONPATH=${builtins.toString ./.}:$PYTHONPATH
               export PATH=${pythonWithPkgs}/bin:${pkgs.git}/bin:$PATH
+              export TODORD_APP_NAME="${appName}"
+              export TODORD_APP_VERSION="${appVersion}"
               alias todord="python ${builtins.toString ./.}/todord.py"
               echo "Todord development environment activated"
               echo "Type 'todord' to run the application"
