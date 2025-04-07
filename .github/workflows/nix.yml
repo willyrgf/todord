@@ -12,6 +12,7 @@ env:
   BUILD_CMD: "nix build -L -v --log-format bar-with-logs"
   RUN_CMD: "nix run .#default -L -v --log-format bar-with-logs -- --help"
   RUN_TESTS_CMD: "nix develop -L -v --log-format bar-with-logs -c python3 test_todord.py"
+  BUILD_SYNG_CMD: "nix build .#todord-syng -L -v --log-format bar-with-logs --no-link"
 
 jobs:
   build-and-test:
@@ -31,10 +32,15 @@ jobs:
         run: |
           nix flake check
 
-      - name: Nix build
+      - name: Nix build default app
         run: |
           echo $BUILD_CMD
           eval $BUILD_CMD
+
+      - name: Nix build todord-syng app
+        run: |
+          echo $BUILD_SYNG_CMD
+          eval $BUILD_SYNG_CMD
 
       - name: Run todord tests
         run: |

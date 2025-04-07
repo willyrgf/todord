@@ -11,30 +11,45 @@ Todord is a Discord bot that helps you manage to-do lists in your Discord channe
 - Track who created tasks and made changes
 - Edit task titles
 - Save and load task lists
+- **Optional:** Automatically sync task data with a Git repository using `syng`
 
 ## Usage
 
-### Using Nix (recommended)
+### Running the Bot (Standard)
+
+#### Using Nix (recommended)
 
 ```sh
-DISCORD_TOKEN="your_discord_token" nix run 'github:willyrgf/todord'
+# Required: Set your Discord token
+# Run the bot (data stored in ./data by default)
+DISCORD_TOKEN="your_discord_token" nix run 'github:willyrgf/todord' -- --data_dir ./my_task_data
 ```
 
-### Running directly
+#### Running directly
 
 ```sh
-# Set your Discord token as an environment variable
-export DISCORD_TOKEN="your_discord_token"
-
-# Run the bot
-python todord.py
+# Required: Set your Discord token as an environment variable
+# Run the bot (data stored in ./data by default)
+export DISCORD_TOKEN="your_discord_token" python todord.py --data_dir ./my_task_data
 ```
 
-Or specify the token and other options via command-line arguments:
+### Running the Bot with Git Synchronization (`todord-syng`)
+
+This mode runs the Todord bot and simultaneously uses `syng` to automatically synchronize the data directory with a Git repository.
+
+#### Using Nix
 
 ```sh
-python todord.py --token "your_discord_token" --data_dir "./my_data" --debug
+# Run the bot, syncing data to a local git repository path
+# The data_dir MUST be a path inside a git repository.
+DISCORD_TOKEN="<TOKEN>" nix run 'github:willyrgf/todord#todord-syng' -- --data_dir /path/to/your/git/repo/data
 ```
+
+**Explanation:**
+
+*   `DISCORD_TOKEN`: Your Discord bot token (required).
+*   `--data_dir`: The directory **within a Git repository** where Todord will store its data files (`.json` files). `syng` will monitor this directory, commit changes, and push/pull from the remote associated with the repository.
+*   **SSH Authentication:** For `syng` to push/pull using SSH keys (e.g., with GitHub), ensure your SSH agent is running and configured in the terminal where you run the `nix run` command. The `todord-syng` script will automatically forward your `SSH_AUTH_SOCK` environment variable to enable `git` access.
 
 ## Bot Commands
 
