@@ -6,7 +6,7 @@
     flake-utils.url = "github:numtide/flake-utils";
 
     # Syng
-    syng.url = "github:willyrgf/syng?rev=3de4cac46faf3ea97332b60d21eb752414cc0867";
+    syng.url = "github:willyrgf/syng?rev=ea958ef90712965a35e34bdcc0dc2fdf6c4f1127";
   };
 
   outputs = { self, nixpkgs, flake-utils, syng }:
