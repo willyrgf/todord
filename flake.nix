@@ -53,6 +53,9 @@
           todord-syng = pkgs.writeShellScriptBin "todord-syng" ''
             #!/usr/bin/env bash
             
+            # Capture the SSH Auth Socket from the invoking environment
+            INVOKING_SSH_AUTH_SOCK="''${SSH_AUTH_SOCK}"
+            
             # Function to display usage
             usage() {
               echo "Usage: todord-syng [--data_dir PATH]"
@@ -60,6 +63,7 @@
               echo ""
               echo "Environment variables:"
               echo "  DISCORD_TOKEN      Required: Discord bot token"
+              echo "  SSH_AUTH_SOCK      Optional: Forwarded if set in invoking environment"
               exit 1
             }
             
@@ -104,6 +108,14 @@
             # Set trap to call cleanup function on exit signals
             trap cleanup EXIT SIGINT SIGTERM
             
+            # Export the SSH Auth Socket if it was set
+            if [ -n "$INVOKING_SSH_AUTH_SOCK" ]; then
+              export SSH_AUTH_SOCK="$INVOKING_SSH_AUTH_SOCK"
+              echo "Forwarding SSH_AUTH_SOCK: $SSH_AUTH_SOCK"
+            else
+              echo "Warning: SSH_AUTH_SOCK not set in invoking environment. Git operations requiring SSH agent may fail."
+            fi
+
             # Start processes in the background
             echo "Starting syng with auto-pull in background..."
             ${syngPkg}/bin/syng --source_dir "$DATA_DIR" --git_dir "$DATA_DIR" --auto-pull &
