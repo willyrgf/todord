@@ -10,6 +10,7 @@ import logging
 import os
 import sys
 import uuid
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
@@ -1340,6 +1341,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    import asyncio
-
     asyncio.run(main())

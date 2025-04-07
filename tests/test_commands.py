@@ -133,6 +133,112 @@ class TestTodoListCommands(unittest.IsolatedAsyncioTestCase):
         # Assert that save was called
         self.mock_storage.save.assert_called_once_with(self.mock_ctx)
 
+    async def test_close_task(self):
+        # Add a mock task
+        channel_id = self.mock_ctx.channel.id
+        mock_task = MagicMock()
+        mock_task.set_status = MagicMock()
+        mock_task.__str__.return_value = "[closed] Test Task"  # type: ignore
+
+        self.mock_storage.todo_lists[channel_id] = [mock_task]
+
+        # Call the close_task method directly via callback
+        await self.todo_list.close_task.callback(
+            self.todo_list,
+            self.mock_ctx,
+            task_number=1,  # type: ignore
+        )
+
+        # Assert that the task was marked as closed
+        mock_task.set_status.assert_called_once_with(self.mock_ctx, "closed")
+
+        # Assert that the task was removed from the list
+        self.assertEqual(len(self.mock_storage.todo_lists[channel_id]), 0)
+
+        # Assert that the reply method was called
+        self.mock_ctx.reply.assert_called_once()
+
+        # Assert that save was called
+        self.mock_storage.save.assert_called_once_with(self.mock_ctx)
+
+    async def test_log_task(self):
+        # Add a mock task
+        channel_id = self.mock_ctx.channel.id
+        mock_task = MagicMock()
+        mock_task.add_log = MagicMock()
+        mock_task.show_details = MagicMock(return_value="Task details")
+
+        self.mock_storage.todo_lists[channel_id] = [mock_task]
+
+        # Call the log_task method directly via callback
+        await self.todo_list.log_task.callback(
+            self.todo_list, 
+            self.mock_ctx,
+            task_number=1,  # type: ignore
+            log="Test log entry",
+        )
+
+        # Assert that the log was added to the task
+        mock_task.add_log.assert_called_once_with(self.mock_ctx, "Test log entry")
+
+        # Assert that the reply method was called
+        self.mock_ctx.reply.assert_called_once()
+
+        # Assert that save was called
+        self.mock_storage.save.assert_called_once_with(self.mock_ctx)
+
+    async def test_details_task(self):
+        # Add a mock task
+        channel_id = self.mock_ctx.channel.id
+        mock_task = MagicMock()
+        mock_task.show_details = MagicMock(return_value="Task details with logs and history")
+
+        self.mock_storage.todo_lists[channel_id] = [mock_task]
+
+        # Call the details_task method directly via callback
+        await self.todo_list.details_task.callback(
+            self.todo_list,
+            self.mock_ctx,
+            task_number=1,  # type: ignore
+        )
+
+        # Assert that show_details was called
+        mock_task.show_details.assert_called_once()
+
+        # Assert that the reply method was called
+        self.mock_ctx.reply.assert_called_once()
+
+        # Check the embed content
+        _, kwargs = self.mock_ctx.reply.call_args
+        embed = kwargs["embed"]
+        self.assertIn("Task details with logs and history", embed.description)
+
+    async def test_edit_task(self):
+        # Add a mock task
+        channel_id = self.mock_ctx.channel.id
+        mock_task = MagicMock()
+        mock_task.title = "Original Title"
+        mock_task.set_title = MagicMock()
+
+        self.mock_storage.todo_lists[channel_id] = [mock_task]
+
+        # Call the edit_task method directly via callback
+        await self.todo_list.edit_task.callback(
+            self.todo_list,
+            self.mock_ctx,
+            task_number=1,  # type: ignore
+            new_title="Updated Title",
+        )
+
+        # Assert that set_title was called with the new title
+        mock_task.set_title.assert_called_once_with(self.mock_ctx, "Updated Title")
+
+        # Assert that the reply method was called
+        self.mock_ctx.reply.assert_called_once()
+
+        # Assert that save was called
+        self.mock_storage.save.assert_called_once_with(self.mock_ctx)
+
     async def test_invalid_task_number(self):
         # Add a mock task
         channel_id = self.mock_ctx.channel.id

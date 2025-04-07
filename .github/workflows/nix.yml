@@ -11,7 +11,7 @@ on:
 env:
   BUILD_CMD: "nix build -L -v --log-format bar-with-logs"
   RUN_CMD: "nix run .#default -L -v --log-format bar-with-logs -- --help"
-  RUN_TESTS_CMD: "nix develop -L -v --log-format bar-with-logs -c python3 run_tests.py"
+  RUN_TESTS_CMD: "nix develop -L -v --log-format bar-with-logs -c python3 test_todord.py"
 
 jobs:
   build-and-test:
@@ -58,4 +58,3 @@ jobs:
             echo "✗ Help text does not contain 'DATA_DIR'"
             exit 1
           fi
-
