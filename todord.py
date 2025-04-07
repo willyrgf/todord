@@ -20,7 +20,7 @@ from discord.ext import commands
 from discord import errors as discord_errors
 from aiohttp import client_exceptions
 
-
+# Configure logging
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -29,6 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger("todord")
 
 
+# Constants
 class TaskEvent:
     """Constants for task events."""
 
@@ -36,6 +37,21 @@ class TaskEvent:
     STATUS_UPDATED = "task_status_updated"
     LOG_ADDED = "task_log_added"
     TITLE_EDITED = "task_title_edited"
+
+
+# Exceptions
+class TodordError(Exception):
+    """Base exception for Todord errors."""
+
+    pass
+
+
+# Utility Functions
+def create_embed(ctx, title, description, color):
+    """Create a standardized Discord embed."""
+    embed = discord.Embed(title=title, description=description, color=color)
+    embed.set_footer(text=f"Requested by {ctx.author.name}")
+    return embed
 
 
 class Task:
@@ -50,16 +66,6 @@ class Task:
         logs: Optional[List[str]] = None,
         creator: Optional[str] = None,
     ) -> None:
-        """Initialize a new task.
-
-        Args:
-            ctx: The command context
-            id: The task ID
-            title: The task title
-            status: The task status
-            logs: Optional list of logs
-            creator: Optional creator name (defaults to ctx.author.name)
-        """
         self.id: int = id
         self.title: str = title
         self.status: str = status
@@ -71,37 +77,18 @@ class Task:
     def add_internal_log(
         self, ctx: commands.Context, log: str, extra_info: str = ""
     ) -> None:
-        """Add an internal log entry.
-
-        Args:
-            ctx: The command context
-            log: The log message
-            extra_info: Optional additional information about the action
-        """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         user = ctx.author.name
         action = log if not extra_info else f"{log}: {extra_info}"
         self.internal_logs.append((timestamp, user, action))
 
     def add_log(self, ctx: commands.Context, log: str) -> None:
-        """Add a user log entry.
-
-        Args:
-            ctx: The command context
-            log: The log message
-        """
         self.logs.append(log)
         self.add_internal_log(
             ctx, TaskEvent.LOG_ADDED, f"'{log[:30]}{'...' if len(log) > 30 else ''}'"
         )
 
     def set_status(self, ctx: commands.Context, status: str) -> None:
-        """Set the task status.
-
-        Args:
-            ctx: The command context
-            status: The new status
-        """
         old_status = self.status
         self.status = status
         self.add_internal_log(
@@ -109,12 +96,6 @@ class Task:
         )
 
     def set_title(self, ctx: commands.Context, title: str) -> None:
-        """Set the task title.
-
-        Args:
-            ctx: The command context
-            title: The new title
-        """
         old_title = self.title
         self.title = title
         self.add_internal_log(
@@ -124,11 +105,6 @@ class Task:
         )
 
     def show_details(self) -> str:
-        """Get a detailed representation of the task.
-
-        Returns:
-            A formatted string with task details including history
-        """
         details = [f"**[{self.status}] {self.title}**"]
         details.append(f"Created by: {self.creator}")
 
@@ -164,11 +140,6 @@ class Task:
         return "\n".join(details)
 
     def __str__(self) -> str:
-        """Get a string representation of the task.
-
-        Returns:
-            A formatted string with basic task info
-        """
         return f"**[{self.status}] {self.title}**"
 
 
@@ -176,12 +147,6 @@ class StorageManager:
     """Manages task persistence."""
 
     def __init__(self, data_dir: Union[str, Path], session_id: str) -> None:
-        """Initialize the storage manager.
-
-        Args:
-            data_dir: Directory to store data files
-            session_id: Current session ID
-        """
         self.data_dir = Path(data_dir)
         self.session_id = session_id
         self.todo_lists: Dict[int, List[Task]] = {}  # channel_id -> [Task, Task, ...]
@@ -191,14 +156,6 @@ class StorageManager:
             logger.info(f"Created data directory: {self.data_dir}")
 
     async def save(self, ctx: Optional[commands.Context] = None) -> str:
-        """Save the current state of todo lists.
-
-        Args:
-            ctx: The command context, can be None for auto-saves during shutdown
-
-        Returns:
-            The filename of the saved file
-        """
         current_time = datetime.now()
         filename = f"todo_lists_{self.session_id}_{current_time.strftime('%Y-%m-%d_%H-%M-%S')}.json"
         filepath = self.data_dir / filename
@@ -209,15 +166,6 @@ class StorageManager:
         return filename
 
     async def load(self, ctx: commands.Context, filename: str) -> bool:
-        """Load todo lists from a file.
-
-        Args:
-            ctx: The command context
-            filename: The file to load from
-
-        Returns:
-            True if successful, False otherwise
-        """
         try:
             filepath = self.data_dir / filename
             with open(filepath, "r") as f:
@@ -254,11 +202,6 @@ class StorageManager:
             return False
 
     def list_saved_files(self) -> List[str]:
-        """List all saved todo list files.
-
-        Returns:
-            A list of filenames
-        """
         files = [
             f
             for f in os.listdir(self.data_dir)
@@ -282,7 +225,6 @@ class CustomHelpCommand(commands.HelpCommand):
         )
 
     async def send_bot_help(self, mapping):
-        """Send the bot help page."""
         embed = discord.Embed(
             title="!help command:",
             color=discord.Color.blue(),
@@ -334,7 +276,6 @@ class CustomHelpCommand(commands.HelpCommand):
         await self.get_destination().send(embed=embed)
 
     async def send_command_help(self, command):
-        """Send help for a specific command."""
         embed = discord.Embed(
             title=f"Command: !{command.name}", color=discord.Color.green()
         )
@@ -357,7 +298,6 @@ class CustomHelpCommand(commands.HelpCommand):
         await self.get_destination().send(embed=embed)
 
     async def send_cog_help(self, cog):
-        """Send help for a specific category/cog."""
         embed = discord.Embed(
             title=f"Category: {cog.qualified_name}",
             description=cog.description or "No description provided.",
@@ -381,34 +321,19 @@ class CustomHelpCommand(commands.HelpCommand):
         await self.get_destination().send(embed=embed)
 
     async def send_error_message(self, error):
-        """Send an error message."""
         embed = discord.Embed(
             title="Error", description=error, color=discord.Color.red()
         )
         await self.get_destination().send(embed=embed)
 
 
+# Command Cogs
 class TodoList(commands.Cog):
     """Task management commands."""
 
     def __init__(self, bot: commands.Bot, storage: StorageManager) -> None:
-        """Initialize the TodoList cog.
-
-        Args:
-            bot: The Discord bot
-            storage: The storage manager
-        """
         self.bot = bot
         self.storage = storage
-
-    # Helper to create standard embeds
-    def _create_embed(
-        self, ctx: commands.Context, title: str, description: str, color: discord.Color
-    ) -> discord.Embed:
-        """Create a standardized Discord embed."""
-        embed = discord.Embed(title=title, description=description, color=color)
-        embed.set_footer(text=f"Requested by {ctx.author.name}")
-        return embed
 
     @commands.command(
         name="add",
@@ -416,12 +341,6 @@ class TodoList(commands.Cog):
         help="Add new task to the channel's to-do list.",
     )
     async def add_task(self, ctx: commands.Context, *, task: str) -> None:
-        """Add a task to the channel's to-do list.
-
-        Args:
-            ctx: The command context
-            task: The task description
-        """
         channel_id = ctx.channel.id
 
         if channel_id not in self.storage.todo_lists:
@@ -431,7 +350,7 @@ class TodoList(commands.Cog):
         new_task = Task(ctx, task_id, task, "pending", [])
         self.storage.todo_lists[channel_id].append(new_task)
 
-        embed = self._create_embed(
+        embed = create_embed(
             ctx, "✅ Task Added", f"**{new_task.title}**", discord.Color.green()
         )
         await ctx.reply(embed=embed)
@@ -443,16 +362,11 @@ class TodoList(commands.Cog):
         help="List all tasks for this channel.",
     )
     async def list_tasks(self, ctx: commands.Context) -> None:
-        """List all tasks in the channel's to-do list.
-
-        Args:
-            ctx: The command context
-        """
         channel_id = ctx.channel.id
         tasks = self.storage.todo_lists.get(channel_id, [])
 
         if not tasks:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "ℹ️ Info",
                 "There are no tasks in this channel's to-do list.",
@@ -465,7 +379,7 @@ class TodoList(commands.Cog):
         for idx, task in enumerate(tasks, start=1):
             response += f"{idx}. {task}\n"
 
-        embed = self._create_embed(
+        embed = create_embed(
             ctx, "📋 Channel To-Do List", response, discord.Color.blue()
         )
         await ctx.reply(embed=embed)
@@ -476,17 +390,11 @@ class TodoList(commands.Cog):
         help="Mark task as done and remove it from list.",
     )
     async def done_task(self, ctx: commands.Context, task_number: int) -> None:
-        """Mark a task as done.
-
-        Args:
-            ctx: The command context
-            task_number: The task number to mark as done
-        """
         channel_id = ctx.channel.id
         tasks = self.storage.todo_lists.get(channel_id, [])
 
         if not tasks:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "ℹ️ Info",
                 "There are no tasks in this channel's to-do list.",
@@ -499,13 +407,13 @@ class TodoList(commands.Cog):
             removed = tasks.pop(task_number - 1)
             removed.set_status(ctx, "done")
 
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx, "✔️ Task Marked as Done", f"**{removed}**", discord.Color.green()
             )
             await ctx.reply(embed=embed)
             await self.storage.save(ctx)
         else:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "❌ Error",
                 f"Invalid task number: {task_number}. Use `!list` to see valid numbers.",
@@ -519,17 +427,11 @@ class TodoList(commands.Cog):
         help="Close a task without completing and remove from list.",
     )
     async def close_task(self, ctx: commands.Context, task_number: int) -> None:
-        """Close a task.
-
-        Args:
-            ctx: The command context
-            task_number: The task number to close
-        """
         channel_id = ctx.channel.id
         tasks = self.storage.todo_lists.get(channel_id, [])
 
         if not tasks:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "ℹ️ Info",
                 "There are no tasks in this channel's to-do list.",
@@ -542,7 +444,7 @@ class TodoList(commands.Cog):
             removed = tasks.pop(task_number - 1)
             removed.set_status(ctx, "closed")
 
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "✖️ Task Closed",
                 f"**{removed}**",
@@ -551,7 +453,7 @@ class TodoList(commands.Cog):
             await ctx.reply(embed=embed)
             await self.storage.save(ctx)
         else:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "❌ Error",
                 f"Invalid task number: {task_number}. Use `!list` to see valid numbers.",
@@ -567,18 +469,11 @@ class TodoList(commands.Cog):
     async def log_task(
         self, ctx: commands.Context, task_number: int, *, log: str
     ) -> None:
-        """Add a log to a task.
-
-        Args:
-            ctx: The command context
-            task_number: The task number to add a log to
-            log: The log message
-        """
         channel_id = ctx.channel.id
         tasks = self.storage.todo_lists.get(channel_id, [])
 
         if not tasks:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "ℹ️ Info",
                 "There are no tasks in this channel's to-do list.",
@@ -591,7 +486,7 @@ class TodoList(commands.Cog):
             task = tasks[task_number - 1]
             task.add_log(ctx, log)
 
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 f"📝 Log Added to Task #{task_number}",
                 f"Log: '{log}'\n\n**Current Task Details:**\n{task.show_details()}",
@@ -600,7 +495,7 @@ class TodoList(commands.Cog):
             await ctx.reply(embed=embed)
             await self.storage.save(ctx)
         else:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "❌ Error",
                 f"Invalid task number: {task_number}. Use `!list` to see valid numbers.",
@@ -614,17 +509,11 @@ class TodoList(commands.Cog):
         help="Show details of a task.",
     )
     async def details_task(self, ctx: commands.Context, task_number: int) -> None:
-        """Show details of a task.
-
-        Args:
-            ctx: The command context
-            task_number: The task number to show details for
-        """
         channel_id = ctx.channel.id
         tasks = self.storage.todo_lists.get(channel_id, [])
 
         if not tasks:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "ℹ️ Info",
                 "There are no tasks in this channel's to-do list.",
@@ -637,12 +526,12 @@ class TodoList(commands.Cog):
             task = tasks[task_number - 1]
             details = task.show_details()
 
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx, f"🔍 Task #{task_number} Details", details, discord.Color.blue()
             )
             await ctx.reply(embed=embed)
         else:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "❌ Error",
                 f"Invalid task number: {task_number}. Use `!list` to see valid numbers.",
@@ -658,18 +547,11 @@ class TodoList(commands.Cog):
     async def edit_task(
         self, ctx: commands.Context, task_number: int, *, new_title: str
     ) -> None:
-        """Edit a task's title.
-
-        Args:
-            ctx: The command context
-            task_number: The task number to edit
-            new_title: The new task title
-        """
         channel_id = ctx.channel.id
         tasks = self.storage.todo_lists.get(channel_id, [])
 
         if not tasks:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "ℹ️ Info",
                 "There are no tasks in this channel's to-do list.",
@@ -683,7 +565,7 @@ class TodoList(commands.Cog):
             old_title = task.title
             task.set_title(ctx, new_title)
 
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "✏️ Task Edited",
                 f"Task #{task_number} title changed:\n**From:** {old_title}\n**To:** {new_title}",
@@ -692,7 +574,7 @@ class TodoList(commands.Cog):
             await ctx.reply(embed=embed)
             await self.storage.save(ctx)
         else:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "❌ Error",
                 f"Invalid task number: {task_number}. Use `!list` to see valid numbers.",
@@ -705,23 +587,8 @@ class BotManagement(commands.Cog):
     """Administrative Bot commands."""
 
     def __init__(self, bot: commands.Bot, storage: StorageManager) -> None:
-        """Initialize the BotManagement cog.
-
-        Args:
-            bot: The Discord bot
-            storage: The storage manager
-        """
         self.bot = bot
         self.storage = storage
-
-    # Helper to create standard embeds
-    def _create_embed(
-        self, ctx: commands.Context, title: str, description: str, color: discord.Color
-    ) -> discord.Embed:
-        """Create a standardized Discord embed."""
-        embed = discord.Embed(title=title, description=description, color=color)
-        embed.set_footer(text=f"Requested by {ctx.author.name}")
-        return embed
 
     @commands.command(
         name="clear",
@@ -729,11 +596,6 @@ class BotManagement(commands.Cog):
         help="Remove current channel's state.",
     )
     async def clear_tasks(self, ctx: commands.Context) -> None:
-        """Clear the channel's to-do list.
-
-        Args:
-            ctx: The command context
-        """
         channel_id = ctx.channel.id
 
         if (
@@ -741,7 +603,7 @@ class BotManagement(commands.Cog):
             and self.storage.todo_lists[channel_id]
         ):
             self.storage.todo_lists[channel_id] = []
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "🗑️ List Cleared",
                 "The channel's to-do list has been cleared.",
@@ -750,7 +612,7 @@ class BotManagement(commands.Cog):
             await ctx.reply(embed=embed)
             await self.storage.save(ctx)
         else:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "ℹ️ Info",
                 "There are no tasks in this channel's to-do list to clear.",
@@ -764,14 +626,9 @@ class BotManagement(commands.Cog):
         help="Manually save the current state to a file.",
     )
     async def save_command(self, ctx: commands.Context) -> None:
-        """Save the current to-do lists.
-
-        Args:
-            ctx: The command context
-        """
         try:
             filename = await self.storage.save(ctx)
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "💾 Lists Saved",
                 f"The to-do lists have been saved to `{filename}`.",
@@ -780,7 +637,7 @@ class BotManagement(commands.Cog):
             await ctx.reply(embed=embed)
         except Exception as e:
             logger.error(f"Error during save command: {e}", exc_info=True)
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "❌ Error Saving",
                 f"An error occurred while saving the lists: {e}",
@@ -794,15 +651,9 @@ class BotManagement(commands.Cog):
         help="Load state from a previously saved file.",
     )
     async def load_command(self, ctx: commands.Context, filename: str) -> None:
-        """Load to-do lists from a file.
-
-        Args:
-            ctx: The command context
-            filename: The file to load from
-        """
         # Basic validation to prevent path traversal
         if ".." in filename or "/" in filename:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "❌ Invalid Filename",
                 "Invalid characters detected in filename.",
@@ -813,7 +664,7 @@ class BotManagement(commands.Cog):
 
         success = await self.storage.load(ctx, filename)
         if success:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "📂 Lists Loaded",
                 f"Successfully loaded to-do lists from `{filename}`.",
@@ -821,7 +672,7 @@ class BotManagement(commands.Cog):
             )
             await ctx.reply(embed=embed)
         else:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "❌ Error Loading",
                 f"Failed to load lists from `{filename}`. Check the filename and ensure it's a valid save file.",
@@ -835,15 +686,10 @@ class BotManagement(commands.Cog):
         help="Load the most recently state saved in file.",
     )
     async def loadlast_command(self, ctx: commands.Context) -> None:
-        """Load the most recent to-do list file.
-
-        Args:
-            ctx: The command context
-        """
         files = self.storage.list_saved_files()
 
         if not files:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "ℹ️ No Files Found",
                 "No saved to-do list files found.",
@@ -857,7 +703,7 @@ class BotManagement(commands.Cog):
 
         success = await self.storage.load(ctx, most_recent_file)
         if success:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "📂 Last List Loaded",
                 f"Successfully loaded the most recent lists from `{most_recent_file}`.",
@@ -865,7 +711,7 @@ class BotManagement(commands.Cog):
             )
             await ctx.send(embed=embed)
         else:
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "❌ Error Loading",
                 f"Failed to load the most recent lists from `{most_recent_file}`. The file might be corrupted.",
@@ -879,22 +725,17 @@ class BotManagement(commands.Cog):
         help="Show all states in files that can be loaded.",
     )
     async def list_files_command(self, ctx: commands.Context) -> None:
-        """List all saved to-do list files.
-
-        Args:
-            ctx: The command context
-        """
         try:
             files = self.storage.list_saved_files()
             if files:
                 # Format files nicely, potentially with numbering
                 files_list = "\n".join([f"{i + 1}. `{f}`" for i, f in enumerate(files)])
-                embed = self._create_embed(
+                embed = create_embed(
                     ctx, "📄 Available Save Files", files_list, discord.Color.blue()
                 )
                 await ctx.send(embed=embed)
             else:
-                embed = self._create_embed(
+                embed = create_embed(
                     ctx,
                     "ℹ️ No Files Found",
                     "No saved to-do list files found.",
@@ -903,7 +744,7 @@ class BotManagement(commands.Cog):
                 await ctx.send(embed=embed)
         except Exception as e:
             logger.error(f"Error listing files: {e}", exc_info=True)
-            embed = self._create_embed(
+            embed = create_embed(
                 ctx,
                 "❌ Error Listing Files",
                 f"An error occurred while listing saved files: {e}",
@@ -916,11 +757,6 @@ class ConnectionMonitor:
     """Monitors connection health and failures."""
 
     def __init__(self, max_retries: int = 3) -> None:
-        """Initialize connection monitor.
-
-        Args:
-            max_retries: Maximum number of consecutive failures before exit
-        """
         self.max_retries = max_retries
         self.consecutive_failures = 0
         self.total_failures = 0
@@ -929,7 +765,6 @@ class ConnectionMonitor:
         self.first_failure_time = None
 
     def connection_successful(self) -> None:
-        """Reset the failure counter on successful connection."""
         if self.consecutive_failures > 0:
             logger.info(
                 f"Connection restored after {self.consecutive_failures} consecutive failures"
@@ -937,14 +772,6 @@ class ConnectionMonitor:
         self.consecutive_failures = 0
 
     def connection_failed(self, error_type: str) -> bool:
-        """Increment failure counter and check if max retries reached.
-
-        Args:
-            error_type: Type of connection error that occurred
-
-        Returns:
-            True if max retries reached, False otherwise
-        """
         now = datetime.now()
         if self.consecutive_failures == 0:
             self.first_failure_time = now
@@ -996,11 +823,6 @@ class ConnectionMonitor:
         return False
 
     def get_status_report(self) -> str:
-        """Get a detailed status report of connection health.
-
-        Returns:
-            A string with connection status information
-        """
         if self.total_failures == 0:
             return "No connection failures detected"
 
@@ -1040,12 +862,45 @@ class ConnectionMonitor:
         return "\n".join(status)
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments.
+# Bot management functions
+async def send_announcement_to_all_channels(
+    bot,
+    title: str,
+    description: str,
+    color: discord.Color,
+    skip_channel_id: Optional[int] = None,
+) -> None:
+    """Send an announcement to all text channels."""
+    for guild in bot.guilds:
+        for channel in guild.text_channels:
+            if skip_channel_id and channel.id == skip_channel_id:
+                continue
+            try:
+                embed = discord.Embed(title=title, description=description, color=color)
+                await channel.send(embed=embed)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to send announcement to {channel.name} in {guild.name}: {e}"
+                )
 
-    Returns:
-        The parsed arguments
-    """
+
+async def find_first_available_channel(bot):
+    """Find the first available text channel for sending messages."""
+    for guild in bot.guilds:
+        for channel in guild.text_channels:
+            try:
+                # Try sending a test message
+                test_msg = await channel.send("Testing channel availability...")
+                await test_msg.delete()  # Clean up test message
+                return channel
+            except Exception:
+                continue
+    return None
+
+
+# Command line argument parsing
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Todord - A Discord To-Do List Bot")
     parser.add_argument(
         "--data_dir",
@@ -1057,9 +912,7 @@ def parse_args() -> argparse.Namespace:
         help="Discord bot token (can also be set via DISCORD_TOKEN env variable)",
     )
     parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug mode with verbose logging",
+        "--debug", action="store_true", help="Enable debug mode with verbose logging"
     )
     parser.add_argument(
         "--max_retries",
@@ -1072,21 +925,154 @@ def parse_args() -> argparse.Namespace:
 
 
 def get_token(args: argparse.Namespace) -> Optional[str]:
-    """Get the Discord token from args or environment.
-
-    Args:
-        args: The parsed command line arguments
-
-    Returns:
-        The Discord token or None if not found
-    """
+    """Get the Discord token from args or environment."""
     # First try from args
     if args.token:
         return args.token
 
     # Then try from environment
-    token = os.getenv("DISCORD_TOKEN")
-    return token
+    return os.getenv("DISCORD_TOKEN")
+
+
+# Setup and start the bot
+async def setup_bot(args, token, session_id, connection_monitor):
+    """Set up the Discord bot with all event handlers and cogs."""
+    # Initialize bot with intents
+    intents = discord.Intents.default()
+    intents.message_content = True
+    bot = commands.Bot(
+        command_prefix="!", intents=intents, help_command=CustomHelpCommand()
+    )
+
+    # Initialize storage
+    data_dir = Path(args.data_dir)
+    storage = StorageManager(data_dir, session_id)
+
+    # Define event handlers
+    @bot.event
+    async def on_ready() -> None:
+        # Reset connection failures on successful connection
+        connection_monitor.connection_successful()
+
+        if bot.user:
+            logger.info(f"Logged in as {bot.user.name}")
+            logger.info(f"Bot ID: {bot.user.id}")
+            logger.info("Session ID: " + session_id)
+
+            # Add cogs
+            await bot.add_cog(TodoList(bot, storage))
+            await bot.add_cog(BotManagement(bot, storage))
+
+            logger.info("Cogs loaded successfully")
+
+            # Announce bot is online in all text channels
+            await send_announcement_to_all_channels(
+                bot,
+                "🟢 Todord Bot Online",
+                "Ready to help!",
+                discord.Color.green(),
+            )
+
+            # Auto-execute loadlast command if there are saved files
+            bot_management_cog = bot.get_cog("BotManagement")
+            if bot_management_cog:
+                files = storage.list_saved_files()
+                if files:
+                    # Find a channel where we can run the command
+                    channel = await find_first_available_channel(bot)
+                    if channel:
+                        try:
+                            # Send loading message and create context for command
+                            loading_msg = await channel.send(
+                                "Auto-loading last saved state..."
+                            )
+                            ctx = await bot.get_context(loading_msg)
+
+                            # Execute loadlast command using getattr to fix attribute access error
+                            loadlast_cmd = getattr(
+                                bot_management_cog, "loadlast_command"
+                            )
+                            await loadlast_cmd(ctx)
+
+                            # Announce successful loading to all channels
+                            most_recent_file = files[-1]
+                            await send_announcement_to_all_channels(
+                                bot,
+                                "📂 State Auto-Loaded",
+                                f"Successfully loaded the most recent todo list from `{most_recent_file}`",
+                                discord.Color.green(),
+                                channel.id,  # Skip the channel we already announced in
+                            )
+                        except Exception as e:
+                            logger.error(f"Error during auto-load: {e}", exc_info=True)
+                    else:
+                        logger.warning("Could not find any channel to auto-load state")
+            else:
+                logger.error("BotManagement cog not found for auto-loading")
+        else:
+            logger.error("Failed to log in - bot.user is None")
+
+    @bot.event
+    async def on_resume() -> None:
+        connection_monitor.connection_successful()
+        logger.info("Bot resumed connection to Discord")
+
+    @bot.event
+    async def on_disconnect() -> None:
+        logger.warning("Bot disconnected from Discord")
+
+        # Track disconnects as connection failures
+        error_type = "Disconnection"
+        if connection_monitor.connection_failed(error_type):
+            logger.critical(
+                "Connection failure threshold reached after multiple disconnections. Exiting..."
+            )
+            logger.critical(connection_monitor.get_status_report())
+            sys.exit(1)
+
+    @bot.event
+    async def on_connect() -> None:
+        connection_monitor.connection_successful()
+        logger.info("Bot connected to Discord")
+
+    @bot.event
+    async def on_error(event_method: str, *_args, **_kwargs) -> None:
+        logger.error(f"Error in {event_method}: {sys.exc_info()[1]}")
+
+        # Check if this is a connection-related error
+        exc_type, exc_value, _ = sys.exc_info()
+
+        # Check for client connector errors (network issues)
+        if isinstance(
+            exc_value,
+            (
+                TimeoutError,
+                discord_errors.ConnectionClosed,
+                discord_errors.GatewayNotFound,
+                asyncio.exceptions.CancelledError,
+                discord_errors.HTTPException,
+                discord_errors.LoginFailure,
+                client_exceptions.ClientConnectorError,
+                client_exceptions.ClientConnectorDNSError,
+            ),
+        ):
+            error_type = exc_type.__name__  # type: ignore
+            logger.warning(f"Connection error detected: {error_type}: {exc_value}")
+
+            if connection_monitor.connection_failed(error_type):
+                logger.critical("Connection failure threshold reached. Exiting...")
+                logger.critical(connection_monitor.get_status_report())
+                sys.exit(1)
+
+    # Message logging (optional)
+    @bot.listen("on_message")
+    async def on_message(message: discord.Message) -> None:
+        if message.author != bot.user:  # Don't log the bot's own messages
+            logger.debug(
+                f"Message from {message.author} in {message.channel}: {message.content}"
+            )
+
+    return bot, storage
 
 
 async def main() -> None:
@@ -1107,208 +1093,18 @@ async def main() -> None:
         )
         sys.exit(1)
 
-    # Ensure data directory exists
-    data_dir = Path(args.data_dir)
-
     # Generate session ID
     session_id = str(uuid.uuid4())
-    logger.info(f"Starting new session: {session_id}")
-
-    # Initialize bot with intents
-    intents = discord.Intents.default()
-    intents.message_content = True
-    bot = commands.Bot(
-        command_prefix="!", intents=intents, help_command=CustomHelpCommand()
-    )
+    logger.info("Starting new session: " + session_id)
 
     # Initialize connection monitor
     connection_monitor = ConnectionMonitor(max_retries=args.max_retries)
-    logger.info(f"Connection monitor initialized with max_retries={args.max_retries}")
+    logger.info(
+        "Connection monitor initialized with max_retries=" + str(args.max_retries)
+    )
 
-    # Initialize storage
-    storage = StorageManager(data_dir, session_id)
-
-    # Helper function to send announcements to all channels
-    async def send_announcement_to_all_channels(
-        title: str,
-        description: str,
-        color: discord.Color,
-        skip_channel_id: Optional[int] = None,
-    ) -> None:
-        """Send an announcement to all text channels.
-
-        Args:
-            title: The title of the embed
-            description: The description of the embed
-            color: The color of the embed
-            skip_channel_id: Optional channel ID to skip (if already announced there)
-        """
-        for guild in bot.guilds:
-            for channel in guild.text_channels:
-                if skip_channel_id and channel.id == skip_channel_id:
-                    continue
-                try:
-                    embed = discord.Embed(
-                        title=title, description=description, color=color
-                    )
-                    await channel.send(embed=embed)
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to send announcement to {channel.name} in {guild.name}: {e}"
-                    )
-
-    # Helper function to find first available channel
-    async def find_first_available_channel():
-        """Find the first available text channel for sending messages.
-
-        Returns:
-            The first available text channel or None
-        """
-        for guild in bot.guilds:
-            for channel in guild.text_channels:
-                try:
-                    # Try sending a test message
-                    test_msg = await channel.send("Testing channel availability...")
-                    await test_msg.delete()  # Clean up test message
-                    return channel
-                except Exception:
-                    continue
-        return None
-
-    # Define on_ready event
-    @bot.event
-    async def on_ready() -> None:
-        """Called when the bot is ready."""
-        # Reset connection failures on successful connection
-        connection_monitor.connection_successful()
-
-        if bot.user:
-            logger.info(f"Logged in as {bot.user.name}")
-            logger.info(f"Bot ID: {bot.user.id}")
-            logger.info(f"Session ID: {session_id}")
-
-            # Add cogs
-            await bot.add_cog(TodoList(bot, storage))
-            await bot.add_cog(BotManagement(bot, storage))
-
-            logger.info("Cogs loaded successfully")
-
-            # Announce bot is online in all text channels
-            await send_announcement_to_all_channels(
-                "🟢 Todord Bot Online",
-                "Online and ready to help!",
-                discord.Color.green(),
-            )
-
-            # Auto-execute loadlast command if there are saved files
-            bot_management_cog = bot.get_cog("BotManagement")
-            if bot_management_cog:
-                files = storage.list_saved_files()
-                if files:
-                    # Find a channel where we can run the command
-                    channel = await find_first_available_channel()
-                    if channel:
-                        try:
-                            # Send loading message and create context for command
-                            loading_msg = await channel.send(
-                                "Auto-loading last saved state..."
-                            )
-                            ctx = await bot.get_context(loading_msg)
-
-                            # Execute loadlast command
-                            await bot_management_cog.loadlast_command(ctx)
-
-                            # Announce successful loading to all channels
-                            most_recent_file = files[-1]
-                            await send_announcement_to_all_channels(
-                                "📂 State Auto-Loaded",
-                                f"Successfully loaded the most recent todo list from `{most_recent_file}`",
-                                discord.Color.green(),
-                                channel.id,  # Skip the channel we already announced in
-                            )
-                        except Exception as e:
-                            logger.error(f"Error during auto-load: {e}", exc_info=True)
-                    else:
-                        logger.warning("Could not find any channel to auto-load state")
-            else:
-                logger.error("BotManagement cog not found for auto-loading")
-        else:
-            logger.error("Failed to log in - bot.user is None")
-
-    @bot.event
-    async def on_resume() -> None:
-        """Called when the bot resumes a session after reconnecting."""
-        connection_monitor.connection_successful()
-        logger.info("Bot resumed connection to Discord")
-
-    @bot.event
-    async def on_disconnect() -> None:
-        """Called when the bot disconnects from Discord."""
-        logger.warning("Bot disconnected from Discord")
-
-        # Track disconnects as connection failures
-        error_type = "Disconnection"
-        if connection_monitor.connection_failed(error_type):
-            logger.critical(
-                "Connection failure threshold reached after multiple disconnections. Exiting..."
-            )
-            logger.critical(connection_monitor.get_status_report())
-            sys.exit(1)
-
-    @bot.event
-    async def on_connect() -> None:
-        """Called when the bot connects to Discord."""
-        connection_monitor.connection_successful()
-        logger.info("Bot connected to Discord")
-
-    @bot.event
-    async def on_error(event_method: str, *args, **kwargs) -> None:
-        """Handle errors that occur in the bot.
-
-        Args:
-            event_method: The event method where the error occurred
-            *args: Arguments passed to the event method
-            **kwargs: Keyword arguments passed to the event method
-        """
-        logger.error(f"Error in {event_method}: {sys.exc_info()[1]}")
-
-        # Check if this is a connection-related error
-        exc_type, exc_value, _ = sys.exc_info()
-
-        # Check for client connector errors (network issues)
-        if isinstance(
-            exc_value,
-            (
-                TimeoutError,
-                discord_errors.ConnectionClosed,
-                discord_errors.GatewayNotFound,
-                asyncio.exceptions.CancelledError,
-                discord_errors.HTTPException,
-                discord_errors.LoginFailure,
-                client_exceptions.ClientConnectorError,
-                client_exceptions.ClientConnectorDNSError,
-            ),
-        ):
-            error_type = exc_type.__name__
-            logger.warning(f"Connection error detected: {error_type}: {exc_value}")
-
-            if connection_monitor.connection_failed(error_type):
-                logger.critical(f"Connection failure threshold reached. Exiting...")
-                logger.critical(connection_monitor.get_status_report())
-                sys.exit(1)
-
-    # Message logging (optional)
-    @bot.listen("on_message")
-    async def on_message(message: discord.Message) -> None:
-        """Log messages received by the bot.
-
-        Args:
-            message: The Discord message
-        """
-        if message.author != bot.user:  # Don't log the bot's own messages
-            logger.debug(
-                f"Message from {message.author} in {message.channel}: {message.content}"
-            )
+    # Set up the bot with all its handlers and cogs
+    bot, _storage = await setup_bot(args, token, session_id, connection_monitor)
 
     # Run the bot
     try:
@@ -1335,7 +1131,7 @@ async def main() -> None:
             logger.warning(f"Connection error detected: {error_type}: {e}")
 
             if connection_monitor.connection_failed(error_type):
-                logger.critical(f"Connection failure threshold reached. Exiting...")
+                logger.critical("Connection failure threshold reached. Exiting...")
                 logger.critical(connection_monitor.get_status_report())
         sys.exit(1)
 
