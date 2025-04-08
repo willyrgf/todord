@@ -6,7 +6,7 @@
     flake-utils.url = "github:numtide/flake-utils";
 
     # Syng
-    syng.url = "github:willyrgf/syng?rev=ea958ef90712965a35e34bdcc0dc2fdf6c4f1127";
+    syng.url = "github:willyrgf/syng?rev=d7a0efad33f808e92717a538f9ac7bb679842b4a";
   };
 
   outputs = { self, nixpkgs, flake-utils, syng }:
@@ -99,7 +99,6 @@
             cleanup() {
               echo "Cleaning up background processes..."
               # Check if PIDs exist before killing to avoid errors
-              [[ -n "$SYNG_AUTO_PULL_PID" ]] && kill -0 $SYNG_AUTO_PULL_PID 2>/dev/null && kill $SYNG_AUTO_PULL_PID
               [[ -n "$SYNG_COMMIT_PUSH_PID" ]] && kill -0 $SYNG_COMMIT_PUSH_PID 2>/dev/null && kill $SYNG_COMMIT_PUSH_PID
               [[ -n "$TODORD_PID" ]] && kill -0 $TODORD_PID 2>/dev/null && kill $TODORD_PID
               echo "Cleanup finished."
@@ -116,13 +115,8 @@
               echo "Warning: SSH_AUTH_SOCK not set in invoking environment. Git operations requiring SSH agent may fail."
             fi
 
-            # Start processes in the background
-            echo "Starting syng with auto-pull in background..."
-            ${syngPkg}/bin/syng --source_dir "$DATA_DIR" --git_dir "$DATA_DIR" --auto-pull &
-            SYNG_AUTO_PULL_PID=$!
-            
-            echo "Starting syng with commit-push in background..."
-            ${syngPkg}/bin/syng --source_dir "$DATA_DIR" --git_dir "$DATA_DIR" --commit-push --per-file &
+            echo "Starting syng with commit-push and auto-pull in background..."
+            ${syngPkg}/bin/syng --source_dir "$DATA_DIR" --git_dir "$DATA_DIR" --commit-push --per-file --auto-pull &
             SYNG_COMMIT_PUSH_PID=$!
             
             echo "Starting todord with data directory: $DATA_DIR in background..."
