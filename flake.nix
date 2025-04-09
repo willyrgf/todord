@@ -6,7 +6,7 @@
     flake-utils.url = "github:numtide/flake-utils";
 
     # Syng
-    syng.url = "github:willyrgf/syng?rev=d7a0efad33f808e92717a538f9ac7bb679842b4a";
+    syng.url = "github:willyrgf/syng?rev=449d5f0881a0784282bb912ffcb48231671593a9";
   };
 
   outputs = { self, nixpkgs, flake-utils, syng }:
@@ -16,11 +16,9 @@
         pythonWithPkgs =
           pkgs.python3.withPackages (ps: with ps; [ discordpy ruff ]);
         
-        # Define app name and version as variables
         appName = "todord";
-        appVersion = "0.1.0";
+        appVersion = "0.1.1";
         
-        # Import syng package
         syngPkg = syng.packages.${system}.default;
       in {
         packages = {
