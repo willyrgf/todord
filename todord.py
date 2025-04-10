@@ -14,6 +14,7 @@ import asyncio
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
+import re
 
 import discord
 from discord.ext import commands
@@ -154,6 +155,10 @@ class StorageManager:
         self.data_dir = Path(data_dir)
         self.session_id = session_id
         self.todo_lists: Dict[int, List[Task]] = {}  # channel_id -> [Task, Task, ...]
+        # Regex to validate save file names: APP_NAME_SESSIONID_YYYY-MM-DD_HH-MM-SS.json
+        self.filename_pattern = re.compile(
+            rf"^{re.escape(APP_NAME)}_.+_[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}_[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}\.json$"
+        )
 
         if not self.data_dir.exists():
             self.data_dir.mkdir(parents=True)
@@ -170,6 +175,14 @@ class StorageManager:
         return filename
 
     async def load(self, ctx: commands.Context, filename: str) -> bool:
+        # Validate filename format
+        if not self.filename_pattern.match(filename):
+            logger.error(
+                f"Attempted to load file with invalid format: {filename}. "
+                f"Expected format: {APP_NAME}_<session_id>_<YYYY-MM-DD_HH-MM-SS>.json"
+            )
+            return False
+
         try:
             filepath = self.data_dir / filename
             with open(filepath, "r") as f:
@@ -206,13 +219,15 @@ class StorageManager:
             return False
 
     def list_saved_files(self) -> List[str]:
-        files = [
-            f
-            for f in os.listdir(self.data_dir)
-            if f.startswith(f"{APP_NAME}_") and f.endswith(".json")
-        ]
-        files.sort(key=lambda x: os.path.getctime(str(self.data_dir / x)))
-        return files
+        valid_files = []
+        for f in os.listdir(self.data_dir):
+            if self.filename_pattern.match(f):
+                valid_files.append(f)
+
+        # Sort files based on the timestamp in the filename (YYYY-MM-DD_HH-MM-SS)
+        # which is the 19 characters before ".json"
+        valid_files.sort(key=lambda x: x[-24:-5])
+        return valid_files
 
 
 class CustomHelpCommand(commands.HelpCommand):
@@ -661,6 +676,18 @@ class BotManagement(commands.Cog):
                 ctx,
                 "❌ Invalid Filename",
                 "Invalid characters detected in filename.",
+                discord.Color.red(),
+            )
+            await ctx.reply(embed=embed)
+            return
+
+        # Validate filename format using the regex from StorageManager
+        if not self.storage.filename_pattern.match(filename):
+            embed = create_embed(
+                ctx,
+                "❌ Invalid Filename Format",
+                f"Filename '{filename}' does not match the expected format: "
+                f"`{APP_NAME}_<session_id>_<YYYY-MM-DD_HH-MM-SS>.json`",
                 discord.Color.red(),
             )
             await ctx.reply(embed=embed)

@@ -75,28 +75,72 @@ class TestStorageManager(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.storage.todo_lists[channel_id][0].title, "Test Task")
 
     async def test_list_saved_files(self):
-        # Create some test files
-        test_files = [
+        # Create some test files with timestamps out of order
+        valid_files_unsorted = [
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_10-00-00.json",
             f"{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00.json",
-            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_12-00-00.json",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_09-30-00.json",
+        ]
+        expected_sorted_files = [
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00.json",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_09-30-00.json",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_10-00-00.json",
         ]
 
-        for filename in test_files:
+        invalid_files = [
+            f"malformed_{todord.APP_NAME}_{self.session_id}_2023-01-03_12-00-00.json",
+            f"{todord.APP_NAME}_{self.session_id}_nodate.json",
+            "other_file.txt",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-04_12-00-00.txt", # Wrong extension
+        ]
+
+        all_files_to_create = valid_files_unsorted + invalid_files
+
+        for filename in all_files_to_create:
             file_path = Path(self.temp_dir) / filename
             with open(file_path, "w") as f:
                 f.write("{}")  # Empty JSON object
 
-        # Add some non-matching files that should be ignored
-        with open(Path(self.temp_dir) / "other_file.txt", "w") as f:
-            f.write("not a todo list")
-
         # Get the list of files
-        files = self.storage.list_saved_files()
+        listed_files = self.storage.list_saved_files()
 
-        # Verify the correct files are returned
-        self.assertEqual(len(files), 2)
-        for filename in test_files:
-            self.assertIn(filename, files)
+        # Verify only valid files are returned and they are sorted correctly
+        self.assertEqual(len(listed_files), len(expected_sorted_files))
+        self.assertEqual(listed_files, expected_sorted_files)
+
+    async def test_load_invalid_filename(self):
+        """Test that loading fails for filenames with invalid formats."""
+        invalid_files = [
+            f"malformed_{todord.APP_NAME}_{self.session_id}_2023-01-03_12-00-00.json",
+            f"{todord.APP_NAME}_{self.session_id}_nodate.json",
+            "other_file.txt",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-04_12-00-00.txt", # Wrong extension
+            f"../{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00.json", # Path traversal attempt
+        ]
+
+        # Create dummy files for invalid names (optional, load should fail based on name alone)
+        for filename in invalid_files:
+            # Avoid creating files outside the temp dir for the path traversal case
+            if "../" not in filename:
+                file_path = Path(self.temp_dir) / filename
+                try:
+                    with open(file_path, "w") as f:
+                        f.write("{}")
+                except OSError as e:
+                    # Handle cases where filename might be invalid for the OS
+                    print(f"Skipping file creation for {filename}: {e}")
+
+        # Ensure todo_lists is empty before testing load failures
+        self.storage.todo_lists = {}
+
+        for filename in invalid_files:
+            with self.subTest(filename=filename):
+                success = await self.storage.load(self.mock_ctx, filename)
+                self.assertFalse(
+                    success, f"Load should have failed for invalid filename: {filename}"
+                )
+                # Ensure the invalid load attempt didn't modify the internal state
+                self.assertEqual(self.storage.todo_lists, {})
 
 
 if __name__ == "__main__":

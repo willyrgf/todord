@@ -20,6 +20,10 @@ class TestBotManagementCommands(unittest.IsolatedAsyncioTestCase):
         self.mock_storage.save = AsyncMock(return_value="test_save.json")
         self.mock_storage.load = AsyncMock(return_value=True)  # Default to successful load
         self.mock_storage.list_saved_files = MagicMock(return_value=["file1.json", "file2.json"])
+        # Mock the filename_pattern with a simple regex that accepts any non-empty string
+        # Detailed pattern testing is in test_storage.py
+        self.mock_storage.filename_pattern = MagicMock()
+        self.mock_storage.filename_pattern.match.side_effect = lambda x: bool(x) # True for non-empty strings
 
         # Create the BotManagement cog
         self.bot_management = BotManagement(self.mock_bot, self.mock_storage)
