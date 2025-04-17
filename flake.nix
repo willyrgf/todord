@@ -6,7 +6,7 @@
     flake-utils.url = "github:numtide/flake-utils";
 
     # Syng
-    syng.url = "github:willyrgf/syng?rev=449d5f0881a0784282bb912ffcb48231671593a9";
+    syng.url = "github:willyrgf/syng?rev=cc1f256479f32e79edc28ca0868f2a21d7aed6cf";
   };
 
   outputs = { self, nixpkgs, flake-utils, syng }:
@@ -116,6 +116,9 @@
             echo "Starting syng with commit-push and auto-pull in background..."
             ${syngPkg}/bin/syng --source_dir "$DATA_DIR" --git_dir "$DATA_DIR" --commit-push --per-file --auto-pull &
             SYNG_COMMIT_PUSH_PID=$!
+
+            echo "Waiting 3s ensure syng already pre pulled any updates on DATA_DIR before running todord"
+            sleep 3
             
             echo "Starting todord with data directory: $DATA_DIR in background..."
             ${self.packages.${system}.todord}/bin/todord --data_dir "$DATA_DIR" &
