@@ -17,7 +17,7 @@
           pkgs.python3.withPackages (ps: with ps; [ discordpy ruff ]);
         
         appName = "todord";
-        appVersion = "0.1.2";
+        appVersion = "0.1.3";
         
         syngPkg = syng.packages.${system}.default;
       in {

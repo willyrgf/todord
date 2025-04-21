@@ -11,7 +11,7 @@ import os
 import sys
 import uuid
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 import re
@@ -157,7 +157,7 @@ class StorageManager:
         self.todo_lists: Dict[int, List[Task]] = {}  # channel_id -> [Task, Task, ...]
         # Regex to validate save file names: APP_NAME_SESSIONID_YYYY-MM-DD_HH-MM-SS.json
         self.filename_pattern = re.compile(
-            rf"^{re.escape(APP_NAME)}_.+_[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}_[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}\.json$"
+            rf"^{re.escape(APP_NAME)}_.+_[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}_[0-9]{{2}}-[0-9]{{2}}-[0-9]{{2}}Z\.json$"
         )
 
         if not self.data_dir.exists():
@@ -165,8 +165,8 @@ class StorageManager:
             logger.info(f"Created data directory: {self.data_dir}")
 
     async def save(self, ctx: Optional[commands.Context] = None) -> str:
-        current_time = datetime.now()
-        filename = f"{APP_NAME}_{self.session_id}_{current_time.strftime('%Y-%m-%d_%H-%M-%S')}.json"
+        current_time = datetime.now(timezone.utc)
+        filename = f"{APP_NAME}_{self.session_id}_{current_time.strftime('%Y-%m-%d_%H-%M-%SZ')}.json"
         filepath = self.data_dir / filename
 
         with open(filepath, "w") as f:
@@ -179,7 +179,7 @@ class StorageManager:
         if not self.filename_pattern.match(filename):
             logger.error(
                 f"Attempted to load file with invalid format: {filename}. "
-                f"Expected format: {APP_NAME}_<session_id>_<YYYY-MM-DD_HH-MM-SS>.json"
+                f"Expected format: {APP_NAME}_<session_id>_<YYYY-MM-DD_HH-MM-SS>Z.json"
             )
             return False
 
@@ -687,7 +687,7 @@ class BotManagement(commands.Cog):
                 ctx,
                 "❌ Invalid Filename Format",
                 f"Filename '{filename}' does not match the expected format: "
-                f"`{APP_NAME}_<session_id>_<YYYY-MM-DD_HH-MM-SS>.json`",
+                f"`{APP_NAME}_<session_id>_<YYYY-MM-DD_HH-MM-SS>Z.json`",
                 discord.Color.red(),
             )
             await ctx.reply(embed=embed)
