@@ -21,7 +21,7 @@ class TestTask(unittest.TestCase):
     def test_task_initialization(self):
         """Test that a task is properly initialized with correct values."""
         self.assertEqual(self.task.id, 1)
-        self.assertEqual(self.task.title, "Test Task")
+        self.assertEqual(self.task.title, "Test Task") # Revert to original expected title
         self.assertEqual(self.task.status, "pending")
         self.assertEqual(self.task.creator, "test_user")
         self.assertEqual(len(self.task.logs), 0)
@@ -92,4 +92,3 @@ class TestTask(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

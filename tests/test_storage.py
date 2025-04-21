@@ -35,7 +35,8 @@ class TestStorageManager(unittest.IsolatedAsyncioTestCase):
     async def test_save_and_load(self, mock_datetime):
         # Mock datetime to return a fixed time for testing
         mock_time = MagicMock()
-        mock_time.strftime.return_value = "2023-01-01_12-00-00"
+        # Update format to include 'Z'
+        mock_time.strftime.return_value = "2023-01-01_12-00-00Z"
         mock_datetime.now.return_value = mock_time
 
         # Create a test task and add it to a channel's todo list
@@ -46,8 +47,8 @@ class TestStorageManager(unittest.IsolatedAsyncioTestCase):
         # Save the state
         filename = await self.storage.save(self.mock_ctx)
 
-        # Verify the expected filename
-        expected_filename = f"{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00.json"
+        # Verify the expected filename - update to include 'Z'
+        expected_filename = f"{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00Z.json"
         self.assertEqual(filename, expected_filename)
 
         # Verify the file exists
@@ -75,23 +76,26 @@ class TestStorageManager(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.storage.todo_lists[channel_id][0].title, "Test Task")
 
     async def test_list_saved_files(self):
-        # Create some test files with timestamps out of order
+        # Create some test files with timestamps out of order - update to include 'Z'
         valid_files_unsorted = [
-            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_10-00-00.json",
-            f"{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00.json",
-            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_09-30-00.json",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_10-00-00Z.json",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00Z.json",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_09-30-00Z.json",
         ]
+        # Update expected sorted list to include 'Z'
         expected_sorted_files = [
-            f"{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00.json",
-            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_09-30-00.json",
-            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_10-00-00.json",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00Z.json",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_09-30-00Z.json",
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-02_10-00-00Z.json",
         ]
 
+        # These should still be invalid with the new 'Z' requirement
         invalid_files = [
-            f"malformed_{todord.APP_NAME}_{self.session_id}_2023-01-03_12-00-00.json",
-            f"{todord.APP_NAME}_{self.session_id}_nodate.json",
-            "other_file.txt",
-            f"{todord.APP_NAME}_{self.session_id}_2023-01-04_12-00-00.txt", # Wrong extension
+            f"malformed_{todord.APP_NAME}_{self.session_id}_2023-01-03_12-00-00Z.json", # Malformed prefix
+            f"{todord.APP_NAME}_{self.session_id}_nodateZ.json", # Missing date part
+            "other_file.txt", # Wrong name structure and extension
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-04_12-00-00Z.txt", # Wrong extension
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-05_12-00-00.json", # Missing Z
         ]
 
         all_files_to_create = valid_files_unsorted + invalid_files
@@ -110,12 +114,14 @@ class TestStorageManager(unittest.IsolatedAsyncioTestCase):
 
     async def test_load_invalid_filename(self):
         """Test that loading fails for filenames with invalid formats."""
+        # Update invalid files list relative to the new 'Z' requirement
         invalid_files = [
-            f"malformed_{todord.APP_NAME}_{self.session_id}_2023-01-03_12-00-00.json",
-            f"{todord.APP_NAME}_{self.session_id}_nodate.json",
-            "other_file.txt",
-            f"{todord.APP_NAME}_{self.session_id}_2023-01-04_12-00-00.txt", # Wrong extension
-            f"../{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00.json", # Path traversal attempt
+            f"malformed_{todord.APP_NAME}_{self.session_id}_2023-01-03_12-00-00Z.json", # Malformed prefix
+            f"{todord.APP_NAME}_{self.session_id}_nodateZ.json", # Missing date part
+            "other_file.txt", # Wrong name structure and extension
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-04_12-00-00Z.txt", # Wrong extension
+            f"{todord.APP_NAME}_{self.session_id}_2023-01-05_12-00-00.json", # Missing Z
+            f"../{todord.APP_NAME}_{self.session_id}_2023-01-01_12-00-00Z.json", # Path traversal attempt
         ]
 
         # Create dummy files for invalid names (optional, load should fail based on name alone)
@@ -145,4 +151,3 @@ class TestStorageManager(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
